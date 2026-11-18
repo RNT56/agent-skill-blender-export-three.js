@@ -1,0 +1,100 @@
+{
+  "name": "autumn_golden_hour",
+  "note": "Shared by gamepipe/gp_preview.py (Blender) and viewer/ (three.js). Approximate parity only: different renderers.",
+  "sun": {
+    "color": [
+      1.0,
+      0.58,
+      0.27
+    ],
+    "elevation_deg": 16,
+    "azimuth_deg": -75,
+    "blender_strength": 6.0,
+    "three_intensity": 5.0
+  },
+  "sky": {
+    "color": [
+      0.8,
+      0.46,
+      0.27
+    ],
+    "ambient_sky": [
+      0.36,
+      0.5,
+      0.88
+    ],
+    "ambient_ground": [
+      0.36,
+      0.21,
+      0.1
+    ],
+    "three_ambient": 1.9,
+    "blender_strength": 0.8,
+    "top": [
+      0.025,
+      0.085,
+      0.34
+    ],
+    "mid": [
+      0.1,
+      0.26,
+      0.5
+    ],
+    "glow": [
+      1.0,
+      0.5,
+      0.22
+    ]
+  },
+  "ground": {
+    "color": [
+      0.12,
+      0.07,
+      0.035
+    ]
+  },
+  "exposure": {
+    "three": 1.02,
+    "blender": 0.0
+  },
+  "foliage": {
+    "translucency": 0.9,
+    "translucency_power": 3.0
+  },
+  "fogDensity": 0.0062,
+  "fog": [
+    0.44,
+    0.34,
+    0.34
+  ],
+  "clouds": {
+    "cover": 0.47,
+    "lit": [
+      1.0,
+      0.7,
+      0.42
+    ],
+    "shadow": [
+      0.3,
+      0.3,
+      0.46
+    ],
+    "speed": 0.0035
+  },
+  "post": {
+    "bloom": 0.34,
+    "bloomRadius": 0.6,
+    "bloomThreshold": 1.0,
+    "saturation": 1.14,
+    "contrast": 1.06,
+    "vignette": 0.32
+  },
+  "fill": {
+    "color": [
+      0.4,
+      0.52,
+      0.92
+    ],
+    "intensity": 1.1
+  }
+}

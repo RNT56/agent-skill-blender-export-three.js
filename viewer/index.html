@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>blend-up viewer</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #111; overflow: hidden; font: 13px/1.4 system-ui, sans-serif; color: #eee; }
+  canvas { display: block; }
+  #ui { position: fixed; top: 12px; left: 12px; background: rgba(0,0,0,.6); padding: 10px 12px; border-radius: 8px; max-width: 360px; }
+  button { background: #2a2a2a; color: #eee; border: 1px solid #555; border-radius: 6px; padding: 4px 10px; margin: 0 4px 4px 0; cursor: pointer; }
+  button.on { background: #c76a1a; border-color: #e58a3a; }
+  #stats { margin-top: 4px; opacity: .9; white-space: pre; font-size: 12px; }
+  label { display: block; margin-top: 6px; opacity: .9; }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/" } }
+</script>
+</head>
+<body>
+<div id="ui">
+  <div id="btns"></div>
+  <label><input type="checkbox" id="trans" checked> foliage translucency</label>
+  <div id="stats">loading…</div>
+</div>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const params = new URLSearchParams(location.search);
+const ASSET = params.get('asset') || 'tree_autumn_01';
+const OUT = `../out/${ASSET}/`;
+const LOD_DISTANCES = [0, 16, 38, 75];          // metres at which LOD0..LOD3 take over (auto mode)
+const col = a => new THREE.Color(a[0], a[1], a[2]);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.1, 400);
+camera.position.set(11, 3.2, 12);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 3.6, 0);
+controls.maxPolarAngle = Math.PI * 0.49;
+controls.update();
+
+// --- loaders: meshopt geometry + KTX2/BasisU textures (what the exported GLBs require)
+const ktx2 = new KTX2Loader()
+  .setTranscoderPath('https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/libs/basis/')
+  .detectSupport(renderer);
+const loader = new GLTFLoader().setKTX2Loader(ktx2).setMeshoptDecoder(MeshoptDecoder);
+
+// --- look (shared with the Blender preview: looks/*.json)
+const manifest = await (await fetch(OUT + 'manifest.json')).json();
+const look = await (await fetch(`../looks/${manifest.look || 'golden_hour'}.json`)).json();
+scene.background = col(look.sky.color);
+scene.fog = new THREE.Fog(col(look.sky.color), 30, 90);
+renderer.toneMappingExposure = look.exposure.three;
+scene.add(new THREE.HemisphereLight(col(look.sky.ambient_sky), col(look.sky.ambient_ground), look.sky.three_ambient));
+const sun = new THREE.DirectionalLight(col(look.sun.color), look.sun.three_intensity);
+{
+  const el = THREE.MathUtils.degToRad(look.sun.elevation_deg), az = THREE.MathUtils.degToRad(look.sun.azimuth_deg);
+  sun.position.set(Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el)).multiplyScalar(18);
+}
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -10, right: 10, top: 12, bottom: -8, near: 1, far: 50 });
+sun.shadow.bias = -0.0005; sun.shadow.normalBias = 0.03;
+scene.add(sun, sun.target);
+const ground = new THREE.Mesh(new THREE.CircleGeometry(120, 64), new THREE.MeshStandardMaterial({ color: col(look.ground.color), roughness: 1 }));
+ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true;
+scene.add(ground);
+
+// --- foliage translucency (glTF cannot carry it): light bleeding through leaves toward the camera
+const transUniforms = {
+  uLightDirView: { value: new THREE.Vector3() }, uSunColor: { value: col(look.sun.color) },
+  uTrans: { value: look.foliage.translucency }, uPow: { value: look.foliage.translucency_power },
+};
+function addTranslucency(mat) {
+  mat.onBeforeCompile = shader => {
+    Object.assign(shader.uniforms, transUniforms);
+    shader.fragmentShader = 'uniform vec3 uLightDirView; uniform vec3 uSunColor; uniform float uTrans; uniform float uPow;\n' +
+      shader.fragmentShader.replace('#include <opaque_fragment>',
+        `float backlit = pow(clamp(-dot(normalize(vViewPosition), uLightDirView), 0.0, 1.0), uPow);
+         outgoingLight += diffuseColor.rgb * uSunColor * backlit * uTrans;
+         #include <opaque_fragment>`);
+  };
+  mat.needsUpdate = true;
+}
+
+const cache = {}, report = {};
+function stats(obj) {
+  let tris = 0, verts = 0, meshes = 0;
+  obj.traverse(o => { if (!o.isMesh) return; meshes++; verts += o.geometry.attributes.position.count;
+    tris += (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3; });
+  return { tris: Math.round(tris), verts, meshes };
+}
+function prep(gltf, lodName) {
+  const root = gltf.scene;
+  root.traverse(o => {
+    if (!o.isMesh) return;
+    o.castShadow = true; o.receiveShadow = true;
+    const m = o.material;
+    m.side = THREE.DoubleSide;
+    if (m.map) m.map.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    const leafish = m.alphaTest > 0;
+    if (leafish && lodName !== 'LOD3') addTranslucency(m);
+    (report[lodName] ??= {})[o.name] = { material: m.name, alphaTest: m.alphaTest, transparent: m.transparent,
+      map: !!m.map, normalMap: !!m.normalMap, aoMap: !!m.aoMap, roughnessFromMap: !!m.roughnessMap,
+      mapIsCompressed: !!(m.map && m.map.isCompressedTexture) };
+  });
+  return root;
+}
+
+const holder = new THREE.Group(); scene.add(holder);
+const lodNode = new THREE.LOD(); scene.add(lodNode);
+let mode = 'auto';
+async function loadLod(l) {
+  if (!cache[l.name]) cache[l.name] = prep(await loader.loadAsync(OUT + l.file), l.name);
+  return cache[l.name];
+}
+async function setMode(m) {
+  mode = m;
+  document.querySelectorAll('#btns button').forEach(b => b.classList.toggle('on', b.dataset.l === m));
+  holder.clear(); lodNode.clear();
+  if (m === 'auto') {
+    for (const [i, l] of manifest.lods.entries()) lodNode.addLevel(await loadLod(l), LOD_DISTANCES[i] ?? 100);
+  } else {
+    holder.add(await loadLod(manifest.lods.find(x => x.name === m)));
+  }
+}
+
+const btns = document.getElementById('btns');
+for (const m of ['auto', ...manifest.lods.map(l => l.name)]) {
+  const b = document.createElement('button'); b.textContent = m; b.dataset.l = m; b.onclick = () => setMode(m); btns.appendChild(b);
+}
+document.getElementById('trans').onchange = e => { transUniforms.uTrans.value = e.target.checked ? look.foliage.translucency : 0; };
+addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+
+const tmp = new THREE.Vector3(), statsEl = document.getElementById('stats');
+renderer.setAnimationLoop(() => {
+  controls.update();
+  tmp.copy(sun.position).sub(sun.target.position).normalize().transformDirection(camera.matrixWorldInverse);
+  transUniforms.uLightDirView.value.copy(tmp);
+  lodNode.update(camera);
+  renderer.render(scene, camera);
+  const active = mode === 'auto' ? manifest.lods[lodNode.getCurrentLevel()] : manifest.lods.find(x => x.name === mode);
+  const o = mode === 'auto' ? lodNode.levels[lodNode.getCurrentLevel()]?.object : cache[mode];
+  const s = o ? stats(o) : { tris: 0, verts: 0 };
+  statsEl.textContent = `${active?.name} (${mode === 'auto' ? 'auto, dist ' + camera.position.distanceTo(controls.target).toFixed(0) + ' m' : 'manual'})\n` +
+    `${s.tris.toLocaleString()} tris · ${s.verts.toLocaleString()} verts · file ${active?.size_mb} MB\n` +
+    `look: ${manifest.look} · KTX2 ${ktx2.workerConfig ? 'ready' : 'pending'}`;
+  window.__state = { mode, level: active?.name, ...s };
+});
+window.scene = scene; window.THREE = THREE; window.report = report; window.manifest = manifest; window.setMode = setMode; window.camera = camera; window.controls = controls;
+await setMode('LOD0');
+</script>
+</body>
+</html>

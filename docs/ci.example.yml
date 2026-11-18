@@ -1,0 +1,24 @@
+# EXAMPLE, UNTESTED: written but never run (developed on macOS with a local Blender). Copy to .github/workflows/ci.yml and verify the Blender download URL/version first.
+name: gamepipe-tests
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      BLENDER_VERSION: "5.3.0"
+      BLENDER: ${{ github.workspace }}/blender/blender
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Blender (headless)
+        run: |
+          sudo apt-get update && sudo apt-get install -y libxi6 libxxf86vm1 libxfixes3 libxrender1 libgl1 libxkbcommon0 libsm6
+          mkdir blender && cd blender
+          curl -L "https://download.blender.org/release/Blender5.3/blender-${BLENDER_VERSION}-linux-x64.tar.xz" | tar -xJ --strip-components=1
+      - name: Lint tests (no Blender)
+        run: python3 tests/test_lint.py
+      - name: Validator tests
+        run: ./blender/blender -b --factory-startup -P tests/test_validator.py
+      - name: Recipe tests
+        run: ./blender/blender -b --factory-startup -P tests/test_recipes.py
+      - name: Golden tree (rebuilds the hero tree from the fixture)
+        run: ./blender/blender -b fixtures/tree_source.blend -P tests/test_tree_golden.py

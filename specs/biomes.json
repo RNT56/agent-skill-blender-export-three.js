@@ -1,0 +1,21 @@
+{
+  "name": "textures",
+  "size": 1024,
+  "seed": 7,
+  "out_dir": "out",
+  "materials": [
+    "meadow",
+    "dry_grass",
+    "forest_floor",
+    "rocky_gravel",
+    "dirt_road",
+    "sakura_petals",
+    "zen_gravel",
+    "stone_wall",
+    "plaster_white",
+    "wood_dark",
+    "roof_tile",
+    "thatch",
+    "wood_light"
+  ]
+}

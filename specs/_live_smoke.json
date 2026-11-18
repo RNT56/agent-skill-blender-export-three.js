@@ -1,0 +1,8 @@
+{
+  "name": "live_smoke",
+  "type": "tree",
+  "root_object": "Tree",
+  "include_objects": ["Tree_Bark", "Tree_Leaves"],
+  "budgets": { "max_tris": 40000, "max_materials": 2 },
+  "export": { "out_dir": "out", "compress": false }
+}

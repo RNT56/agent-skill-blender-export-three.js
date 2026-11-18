@@ -1,0 +1,62 @@
+{
+  "name": "tree_ginkgo_01",
+  "type": "tree",
+  "recipe": "tree",
+  "source_blend": "fixtures/tree_source.blend",
+  "root_object": "Tree",
+  "look": "golden_hour",
+  "budgets": {
+    "max_materials": 2,
+    "max_texture_px": 2048,
+    "max_file_mb": 10
+  },
+  "rules": {},
+  "recipe_cfg": {
+    "bark_obj": "Tree_Bark",
+    "leaf_obj": "Tree_Leaves",
+    "tex_px": 2048,
+    "leaf_palette": "gold",
+    "lods": [
+      {
+        "name": "LOD0",
+        "bark_tris": 22000,
+        "leaf_keep": 1.0,
+        "leaf_scale": 1.0,
+        "max_tris": 40000
+      },
+      {
+        "name": "LOD1",
+        "bark_tris": 7000,
+        "leaf_keep": 0.4,
+        "leaf_scale": 1.45,
+        "max_tris": 14000
+      },
+      {
+        "name": "LOD2",
+        "bark_tris": 1500,
+        "leaf_keep": 0.1,
+        "leaf_scale": 2.4,
+        "max_tris": 4000
+      }
+    ],
+    "impostor": {
+      "name": "LOD3",
+      "px": 1024,
+      "max_tris": 20
+    }
+  },
+  "glb_expect": {
+    "alphaMode": {
+      "leaf": "MASK",
+      "impostor": "MASK"
+    },
+    "occlusion": [
+      "bark"
+    ]
+  },
+  "export": {
+    "out_dir": "out",
+    "compress": true,
+    "png_fallback": false
+  }
+}

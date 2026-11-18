@@ -1,0 +1,42 @@
+{
+  "name": "teahouse_01",
+  "type": "building",
+  "recipe": "building",
+  "source_blend": "fixtures/teahouse.blend",
+  "look": "golden_hour",
+  "budgets": {
+    "max_tris": 40000,
+    "max_materials": 5,
+    "max_texture_px": 1024,
+    "max_file_mb": 12
+  },
+  "lod_budgets": {
+    "LOD0": 28000,
+    "LOD1": 9000,
+    "LOD2": 2500
+  },
+  "rules": {
+    "tiling_uvs": true,
+    "origin_tolerance": 3.6
+  },
+  "recipe_cfg": {
+    "collections": [
+      "teahouse_LOD0",
+      "teahouse_LOD1",
+      "teahouse_LOD2"
+    ]
+  },
+  "glb_expect": {
+    "occlusion": [
+      "tea_stone",
+      "tea_plaster",
+      "tea_wood",
+      "tea_tile"
+    ]
+  },
+  "export": {
+    "out_dir": "out",
+    "compress": true,
+    "png_fallback": false
+  }
+}

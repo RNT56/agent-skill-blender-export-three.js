@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# gp: one entry point for humans and agents.   bin/gp help
+set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+BLENDER="${BLENDER:-}"
+if [[ -z "$BLENDER" ]]; then
+  for c in /Applications/Blender.app/Contents/MacOS/Blender "$(command -v blender || true)"; do
+    [[ -n "$c" && -x "$c" ]] && BLENDER="$c" && break
+  done
+fi
+quiet() { grep -vE "DeprecationWarning|use_nodes|^INFO|\| INFO|^Fra:|^Read |^Blender [0-9]|geom\.mesh|addon_utils|^Info: Baking|^ *$" || true; }
+need_blender() { [[ -n "$BLENDER" ]] || { echo "Blender not found. Set BLENDER=/path/to/Blender" >&2; exit 2; }; }
+
+cmd="${1:-help}"; shift || true
+case "$cmd" in
+  lint)       python3 -I "$ROOT/gamepipe/gp_lint.py" "$@" ;;
+  glb)        python3 -I "$ROOT/gamepipe/gp_glb.py" "$@" ;;
+  validate)   # gp validate specs/x.json [blend]   (report only, no export)
+    need_blender; spec="$1"; blend="${2:-$(python3 -I -c "import json,sys;print(json.load(open(sys.argv[1])).get('source_blend',''))" "$spec")}"
+    "$BLENDER" -b "${blend:+$ROOT/$blend}" -P "$ROOT/gamepipe/gp_cli.py" -- "$spec" --report-only 2>&1 | quiet ;;
+  build)      # gp build specs/x.json [blend] [--no-preview]
+    need_blender; spec="$1"; shift
+    blend="$(python3 -I -c "import json,sys;print(json.load(open(sys.argv[1])).get('source_blend',''))" "$spec")"
+    if [[ "${1:-}" != "" && "${1:-}" != --* ]]; then blend="$1"; shift; elif [[ -n "$blend" ]]; then blend="$ROOT/$blend"; fi
+    if [[ -n "$blend" ]]; then
+      "$BLENDER" -b "$blend" -P "$ROOT/gamepipe/gp_cli.py" -- "$spec" "$@" 2>&1 | quiet
+    else   # recipes that generate everything themselves (grass blades) need no source scene
+      "$BLENDER" -b --factory-startup -P "$ROOT/gamepipe/gp_cli.py" -- "$spec" "$@" 2>&1 | quiet
+    fi ;;
+  generate)   # gp generate generators/samurai_keep.py [-- args]   (runs a Blender generator headless; saves its .blend)
+    need_blender; script="$1"; shift; "$BLENDER" -b --factory-startup -P "$script" -- "$@" 2>&1 | quiet ;;
+  textures)   # gp textures specs/biomes.json   -> tileable PBR sets + tileability checks (out/textures)
+    need_blender; "$BLENDER" -b --factory-startup -P "$ROOT/gamepipe/gp_texgen.py" -- "$@" 2>&1 | quiet ;;
+  test)       # everything: lint, validator, recipes, textures, keep golden, tree golden
+    need_blender; rc=0
+    echo "== lint";      python3 -I "$ROOT/tests/test_lint.py" | tail -3 || rc=1
+    echo "== validator"; "$BLENDER" -b --factory-startup -P "$ROOT/tests/test_validator.py" 2>&1 | grep -E "^(ok|FAIL|ALL|FAILED)" || rc=1
+    echo "== recipes (prop, grass, contract)"; "$BLENDER" -b --factory-startup -P "$ROOT/tests/test_recipes.py" 2>&1 | grep -E "^(ok|FAIL|ALL|FAILED)" || rc=1
+    echo "== texgen (tileability incl. negative test)"; "$BLENDER" -b --factory-startup -P "$ROOT/tests/test_texgen.py" 2>&1 | grep -E "^(ok|FAIL|ALL|FAILED)" || rc=1
+    echo "== textures (full biome + building set)"; "$BLENDER" -b --factory-startup -P "$ROOT/gamepipe/gp_texgen.py" -- "$ROOT/specs/biomes.json" 2>&1 | grep -E "^(\[FAIL|==)" || rc=1
+    echo "== keep golden"; "$BLENDER" -b "$ROOT/fixtures/samurai_keep.blend" -P "$ROOT/tests/test_keep_golden.py" 2>&1 | grep -E "^(ok|FAIL|ALL|FAILED)" || rc=1
+    echo "== village golden (minka)"; "$BLENDER" -b "$ROOT/fixtures/minka.blend" -P "$ROOT/tests/test_buildings_golden.py" -- minka_01 2>&1 | grep -E "^(ok|FAIL|ALL|FAILED)" || rc=1
+    echo "== village golden (teahouse)"; "$BLENDER" -b "$ROOT/fixtures/teahouse.blend" -P "$ROOT/tests/test_buildings_golden.py" -- teahouse_01 2>&1 | grep -E "^(ok|FAIL|ALL|FAILED)" || rc=1
+    echo "== runtime js"; bash "$ROOT/tests/test_runtime_js.sh" | grep -E "^(FAIL|ALL|FAILED)" || rc=1
+    echo "== tree golden"; "$BLENDER" -b "$ROOT/fixtures/tree_source.blend" -P "$ROOT/tests/test_tree_golden.py" 2>&1 | grep -E "^(ok|FAIL|ALL|FAILED)" || rc=1
+    exit $rc ;;
+  view)       echo "serving http://localhost:8765/viewer/  (Ctrl-C to stop)"; cd "$ROOT" && python3 -m http.server 8765 --bind 127.0.0.1 ;;
+  help|*)     cat <<EOF
+gp <command>
+  lint <file.py>...        flag Blender traps in a bpy script (no Blender needed)
+  validate <spec> [blend]  validate only, no export
+  build <spec> [--no-preview]   recipe -> validate -> export -> inspect GLB -> manifest -> preview   (-> out/<asset>/)
+  textures <spec> [--out D] tileable PBR texture sets (biomes, building materials) + seam/range checks
+  generate <script> [args]  run a Blender generator headless (e.g. generators/samurai_keep.py -> fixtures/samurai_keep.blend)
+  glb <file.glb>...        inspect an exported GLB (no Blender needed)
+  test                     lint + validator + recipe + golden tree tests (needs Blender)
+  view                     serve the three.js viewer at http://localhost:8765/viewer/
+env: BLENDER=/path/to/Blender   (auto-detected on macOS)
+EOF
+  ;;
+esac

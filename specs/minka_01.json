@@ -1,0 +1,42 @@
+{
+  "name": "minka_01",
+  "type": "building",
+  "recipe": "building",
+  "source_blend": "fixtures/minka.blend",
+  "look": "golden_hour",
+  "budgets": {
+    "max_tris": 26000,
+    "max_materials": 5,
+    "max_texture_px": 1024,
+    "max_file_mb": 12
+  },
+  "lod_budgets": {
+    "LOD0": 18000,
+    "LOD1": 6000,
+    "LOD2": 2000
+  },
+  "rules": {
+    "tiling_uvs": true,
+    "origin_tolerance": 1.0
+  },
+  "recipe_cfg": {
+    "collections": [
+      "minka_LOD0",
+      "minka_LOD1",
+      "minka_LOD2"
+    ]
+  },
+  "glb_expect": {
+    "occlusion": [
+      "minka_stone",
+      "minka_plaster",
+      "minka_wood",
+      "minka_thatch"
+    ]
+  },
+  "export": {
+    "out_dir": "out",
+    "compress": true,
+    "png_fallback": false
+  }
+}

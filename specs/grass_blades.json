@@ -1,0 +1,16 @@
+{
+  "name": "grass_blades",
+  "type": "grass",
+  "recipe": "grass",
+  "budgets": { "max_tris": 60, "max_materials": 1, "max_file_mb": 0.2 },
+  "rules": {},
+  "recipe_cfg": {
+    "variants": [
+      { "name": "A", "height": 1.0, "width": 0.032, "bend": 0.16, "twist": 0.0 },
+      { "name": "B", "height": 1.0, "width": 0.038, "bend": 0.38, "twist": 0.6 },
+      { "name": "C", "height": 1.0, "width": 0.028, "bend": 0.62, "twist": -0.5 }
+    ],
+    "lod_segments": [4, 2]
+  },
+  "export": { "out_dir": "out", "compress": false }
+}

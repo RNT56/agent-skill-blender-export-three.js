@@ -1,0 +1,13 @@
+{
+  "name": "samurai_keep_01",
+  "type": "building",
+  "recipe": "building",
+  "source_blend": "fixtures/samurai_keep.blend",
+  "look": "golden_hour",
+  "budgets": { "max_tris": 90000, "max_materials": 5, "max_texture_px": 1024, "max_file_mb": 20 },
+  "lod_budgets": { "LOD0": 70000, "LOD1": 20000, "LOD2": 6000 },
+  "rules": { "tiling_uvs": true, "origin_tolerance": 1.0 },
+  "recipe_cfg": { "collections": ["keep_LOD0", "keep_LOD1", "keep_LOD2"] },
+  "glb_expect": { "occlusion": ["keep_stone", "keep_plaster", "keep_wood", "keep_tile"] },
+  "export": { "out_dir": "out", "compress": true, "png_fallback": false }
+}
