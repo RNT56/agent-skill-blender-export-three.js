@@ -85,8 +85,8 @@ surface (not a box) or they poke through; tilt quoins by the wall batter; world-
 Each generator: `bin/gp generate generators/<x>.py [--render out/_x.png --no-save]` -> look at the QA renders -> save fixture -> `bin/gp build specs/<x>_01.json`.
 
 ## Runtime (runtime/*.js) - copy into a game via export_world
-`assets.js` (GLB loader w/ meshopt+KTX2, biome texture arrays) - `terrain.js` (7-biome splat, anti-tiling, tangent frame, distant autumn canopy + snow line) - `grass.js` (chunked tiers, GPU wind, player push) - `water.js` (planar reflection, shoreline from terrain depth, foam, glitter; `mask`) - `post.js` (MSAA HDR -> bloom -> ACES -> grade) -
-`foliage.js`/`trees.js` (instanced LOD buckets, sway, translucency) - `sky.js` (3-stop gradient, sun halo, lit cumulus + cirrus) - `look.js` (shared `looks/*.json`, incl. fill light) - `player.js` - `scatter.js` - `quality.js` (adaptive resolution) - `noise.js`.
+`assets.js` (GLB loader w/ meshopt+KTX2, biome texture arrays) - `terrain.js` (7-biome splat, anti-tiling, tangent frame, distant autumn canopy + snow line) - `grass.js` + `grass_clump.js` (chunked tiers, GPU wind, trampling; `clumps: true` = tall rice-field clumps with seed heads) - `water.js` + `water_waves.js` (shared GPU / CPU wave model, baked-bed shoreline + foam, absorption, caustics, planar reflection, ripples; `heightAt/normalAt/depthAt` for floating things) - `post.js` (MSAA HDR -> bloom -> ACES -> grade) -
+`foliage.js`/`trees.js` (instanced LOD buckets, sway, translucency) - `sky.js` (3-stop gradient, sun halo, lit cumulus + cirrus) - `look.js` (shared `looks/*.json`, incl. fill light) - `player.js` - `scatter.js` - `quality.js` (adaptive resolution) - `noise.js` - `noisetex.js` (one tileable 4-channel noise texture) - **day / night, seasons, weather**: `env_clock.js` (solar + lunar astronomy), `env_atmosphere.js` (keyframes by sun elevation from `looks/atmosphere.json`), `env_seasons.js` (grass / leaf / ground / snow state + appliers), `env_weather.js`, `env_sky.js`, `env_lighting.js`, `env_grade.js` - **life**: `aquatic.js` (reeds, lily pads, flotsam, shore rocks), `fauna.js` (koi, ducks, dragonflies).
 The `looks/golden_hour.json` look is an AUTUMN low-sun look (sun 16 deg from the west, warm sky, cool fill, bloom + grade). Colour authoring: look JSON colours are **scene-linear** (they are NOT sRGB); grass tints are authored as display colours and squared in the shader.
 
 ## Validator codes (fix, don't silence)
@@ -100,5 +100,5 @@ Read `GOTCHAS.md` before writing bpy or shader code. Highlights: `==` not `is` o
 glTF alpha mode comes from a Round node; KTX2 is exported twice unless stripped; never trust fps from a background tab.
 
 ## Not covered (be honest)
-Skeletal animation/characters, rivers/waves/underwater, terrain streaming/collision beyond circle colliders, audio, physics. Lower tree LODs reuse LOD0's normal map.
+Skeletal animation/characters, rivers/underwater, terrain streaming/collision beyond circle colliders, audio, rigid-body physics (water surface physics for floating things IS covered), precipitation (the weather state carries `precip` for it). Lower tree LODs reuse LOD0's normal map.
 Roughness is derived from albedo luminance. Procedural modelling is not hand-sculpted/scanned fidelity. KTX2 verified in one browser/GPU (Apple M4 / Metal).

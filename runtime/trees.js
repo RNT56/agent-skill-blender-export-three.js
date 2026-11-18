@@ -10,7 +10,7 @@ export class InstancedForest {
    * @param trees      [{x,y,z,rot,scale}]
    * @param uniforms   foliage uniforms (createFoliageUniforms)
    */
-  constructor({ scene, lodScenes, lodDist = [32, 70, 130], trees, uniforms, treeHeight = 8, radius = 5, alwaysNear = 70, castShadowLods = 3 }) {
+  constructor({ scene, lodScenes, lodDist = [32, 70, 130], trees, uniforms, treeHeight = 8, radius = 5, alwaysNear = 70, castShadowLods = 3, seasonKind = null }) {
     this.trees = trees; this.lodDist = lodDist; this.radius = radius; this.alwaysNear = alwaysNear; this.treeHeight = treeHeight;
     this.nl = lodScenes.length;
     this.parts = [];                       // parts[lod] = [InstancedMesh...]
@@ -24,7 +24,7 @@ export class InstancedForest {
         if (!patched.has(mat)) {
           const leaf = mat.alphaTest > 0;
           mat.side = THREE.DoubleSide;
-          patchTreeMaterial(mat, uniforms, { leaf, treeHeight, amplitude: leaf ? 0.45 : 0.40 });
+          patchTreeMaterial(mat, uniforms, { leaf, treeHeight, amplitude: leaf ? 0.45 : 0.40, seasonKind });
           patched.set(mat, true);
         }
         const im = new THREE.InstancedMesh(o.geometry, mat, trees.length);
@@ -43,23 +43,24 @@ export class InstancedForest {
     this.counts = new Array(this.nl).fill(0);
   }
 
-  update(camera, dt, force = false) {
+  /** @param center focus point for LOD distances (default: camera). @param lodScale >=1 as the view zooms out: LOD distances x lodScale. */
+  update(camera, dt, force = false, center = null, lodScale = 1) {
     this._t += dt;
-    if (!force && this._t < 0.12 && camera.position.distanceToSquared(this._last) < 1) return;
-    this._t = 0; this._last.copy(camera.position);
+    const cp = center ?? camera.position;
+    if (!force && this._t < 0.12 && cp.distanceToSquared(this._last) < 1 && Math.abs(lodScale - (this._ls ?? 1)) < 0.02) return;
+    this._t = 0; this._last.copy(cp); this._ls = lodScale;
     this._pv.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
     this.frustum.setFromProjectionMatrix(this._pv);
     const cnt = new Array(this.nl).fill(0);
-    const cp = camera.position;
     for (const t of this.trees) {
       const dx = t.x - cp.x, dz = t.z - cp.z, d = Math.hypot(dx, dz);
-      if (d > this.alwaysNear) {
+      if (d > this.alwaysNear * lodScale) {
         this._sph.center.set(t.x, t.y + this.treeHeight * 0.5 * t.scale, t.z);
         this._sph.radius = this.radius * t.scale * 1.6;
         if (!this.frustum.intersectsSphere(this._sph)) continue;
       }
       let lod = 0;
-      while (lod < this.lodDist.length && d > this.lodDist[lod]) lod++;
+      while (lod < this.lodDist.length && d > this.lodDist[lod] * lodScale) lod++;
       this._e.set(0, t.rot, 0);
       this._q.setFromEuler(this._e);
       this._p.set(t.x, t.y, t.z);

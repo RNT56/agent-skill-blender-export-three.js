@@ -29,11 +29,19 @@ export function applyLook(scene, renderer, look, { shadowSize = 4096, shadowRadi
     fill.position.set(-dir.x * 80, 60, -dir.z * 80);
     scene.add(fill);
   }
-  const snap = shadowRadius * 2 / shadowSize;
+  let curR = shadowRadius;
   return {
     sun, hemi, dir, horizon,
+    /** Resize the shadow frustum (RTS: scale it with the zoom so shadow texel density stays sane). */
+    setShadowRadius(rad) {
+      if (Math.abs(rad - curR) < 0.5) return;
+      curR = rad;
+      Object.assign(sun.shadow.camera, { left: -rad, right: rad, top: rad, bottom: -rad });
+      sun.shadow.camera.updateProjectionMatrix();
+    },
     /** Keep the shadow frustum centred on the viewer (texel-snapped to avoid shimmer). */
     followShadow(center) {
+      const snap = curR * 2 / shadowSize;
       const cx = Math.round(center.x / (snap * 8)) * snap * 8, cz = Math.round(center.z / (snap * 8)) * snap * 8;
       sun.target.position.set(cx, center.y, cz);
       sun.position.set(cx, center.y, cz).addScaledVector(dir, 120);

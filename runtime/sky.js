@@ -28,7 +28,7 @@ export function createSky(look, sunDir) {
         vec3 hor = mix(uHorizon, uGlow, pow(s, 2.2) * 0.85);
         vec3 col = mix(hor, uMid, smoothstep(0.0, 0.32, h));
         col = mix(col, uTop, smoothstep(0.25, 0.9, h));
-        col = mix(col, uGround, smoothstep(0.0, -0.22, h));
+        col = mix(col, uGround, (1.0 - smoothstep(-0.22, 0.0, h)));
         // sun disc, halo, and a broad scattering lobe
         col += uSunColor * (pow(s, 1800.) * 22. + pow(s, 90.) * 1.6 + pow(s, 14.) * 0.5 + pow(s, 3.) * 0.10);
         if (h > 0.004) {

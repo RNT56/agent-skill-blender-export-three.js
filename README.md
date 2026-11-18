@@ -10,6 +10,7 @@
 ![WebGL2](https://img.shields.io/badge/WebGL-2-990000?logo=webgl&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-3-3776AB?logo=python&logoColor=white)
 ![Agent skill](https://img.shields.io/badge/agent%20skill-Claude%20Code%20%7C%20Codex-8A2BE2)
+![License: MIT](https://img.shields.io/badge/license-MIT-green)
 ![Tests](https://img.shields.io/badge/tests-10%20suites%20%C2%B7%20120%20checks-brightgreen)
 ![Procedural](https://img.shields.io/badge/assets-procedural-lightgrey)
 
@@ -157,12 +158,15 @@ import { createLoader, loadBiomeArrays, applyLook, createSky, createTerrain, Gra
 | Module | What it does |
 |---|---|
 | `assets.js` | GLB loader with meshopt + KTX2; biome PBR texture arrays |
-| `terrain.js` | heightfield, 7-biome splat blending, anti-tiling, tangent-space normals, distant canopy colour + snow line |
-| `grass.js` | chunked tiers (near blades → far tufts), GPU wind and gusts, player push-through, translucency |
+| `terrain.js` | heightfield, 7-biome splat blending, anti-tiling, tangent-space normals, triplanar cliff rock, shoreline wetness, walkability overlay, seasonal tint + snow |
+| `grass.js`, `grass_clump.js`, `grass_trample.js` | chunked tiers; GLB blades or procedural tall-field clumps with seed heads (rolling wind bands, gust cells, season ripeness); translucency; a persistent trample field (any number of walkers part the grass sideways, press it along their heading, and it springs back over seconds); streaming that never pops (new chunks grow in, replaced ones fade under them, built ahead of the camera within a time budget) |
 | `trees.js`, `foliage.js` | instanced LOD buckets, sway, leaf translucency |
-| `water.js` | planar reflection (mirrored camera, oblique clip plane), depth-based shoreline, foam, glitter; `mask` for carved basins |
+| `water.js`, `water_waves.js` | wind-driven lake: one wave model shared by GPU and CPU physics, baked-bed shoreline with foam and swash, per-channel absorption, caustics, planar reflection, sun / moon glints, live ripples; `heightAt` / `normalAt` / `depthAt` for floating things |
+| `aquatic.js`, `fauna.js` | reeds with cattails, lily pads and lotus, drifting petals, shore rocks; koi, ducks, dragonflies (instanced, season- and fog-aware) |
+| `env_clock.js`, `env_atmosphere.js`, `env_seasons.js`, `env_weather.js` | world clock with real solar / lunar astronomy, keyframes indexed by sun elevation (`looks/atmosphere.json`), seasons (grass, leaves, ground, snow, particles), weather state |
+| `env_sky.js`, `env_lighting.js`, `env_grade.js`, `noisetex.js` | dynamic sky (stars, moon, clouds), sun / moon key light rig with lamps, full colour grade, one tileable noise texture for cheap shader noise |
 | `sky.js`, `look.js` | procedural sky with lit clouds; shared lighting look (`looks/*.json`, also drives the Blender preview) |
-| `post.js` | MSAA HDR target → bloom → ACES tonemap → colour grade + vignette |
+| `post.js` | MSAA HDR target (+ optional depth texture) → bloom → ACES tonemap → `env_grade` colour grade |
 | `player.js`, `scatter.js`, `quality.js`, `noise.js` | first-person controller, Poisson-ish scatter, adaptive resolution, seeded noise |
 
 ## Testing
@@ -199,5 +203,5 @@ bin/gp           one entry point        out/       build output (git-ignored)
 
 ## License
 
-No license file has been added yet, so by default all rights are reserved. Open an issue if you would like to use or contribute to this.
+[MIT](LICENSE): use it, change it, ship it. Issues and pull requests are welcome.
 
