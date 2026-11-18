@@ -10,6 +10,7 @@ import { mulberry32 } from './noise.js';
 import { createNoiseTexture } from './noisetex.js';
 import { createClumpLods } from './grass_clump.js';
 import { TrampleMap } from './grass_trample.js';
+import { RAMP_HALF, RAMP_OUT, FAR_START } from './grass_lod.js';
 
 const DEFAULT_TIERS = [
   { r: 26, density: 34, lod: 0, wScale: 1.0, hScale: 1.0 },
@@ -105,15 +106,15 @@ export class GrassField {
       const g = new THREE.InstancedBufferGeometry();
       g.index = new THREE.BufferAttribute(src.index.array, 1);                  // a chunk's own index: dispose() must not delete a buffer shared by every chunk
       for (const name of ['position', 'normal', 'uv', 'aBlade', 'aHead']) { const at = src.getAttribute(name); if (at) g.setAttribute(name, new THREE.BufferAttribute(at.array, at.itemSize)); }
-      const off = new Float32Array(n * 3), par = new Float32Array(n * 4), tin = new Float32Array(n * 3), life = new Float32Array(n * 2);
+      const off = new Float32Array(n * 3), par = new Float32Array(n * 4), tin = new Float32Array(n * 3), life = new Float32Array(n * 4), built = t.density / (this.scale * this.scale), tag = this.qi * 4 + tier;
       for (let i = 0; i < n; i++) {
         const o = i * 11;
         off.set([a[o], a[o + 1], a[o + 2]], i * 3);
         par.set([a[o + 3], a[o + 4], a[o + 5], a[o + 6]], i * 4);
         tin.set([a[o + 8], a[o + 9], a[o + 10]], i * 3);
-        life[i * 2] = born; life[i * 2 + 1] = 1e12;                             // (born, dies): the shader grows the blade in after `born` and out after `dies`
+        life[i * 4] = born; life[i * 4 + 1] = 1e12; life[i * 4 + 2] = built; life[i * 4 + 3] = tag;   // (born, dies, density it was built at, level * 4 + tier): growth, retirement and the continuous level of detail
       }
-      const lifeAttr = new THREE.InstancedBufferAttribute(life, 2);
+      const lifeAttr = new THREE.InstancedBufferAttribute(life, 4);
       g.setAttribute('iOffset', new THREE.InstancedBufferAttribute(off, 3));
       g.setAttribute('iParams', new THREE.InstancedBufferAttribute(par, 4));
       g.setAttribute('iTint', new THREE.InstancedBufferAttribute(tin, 3));
@@ -137,7 +138,7 @@ export class GrassField {
   _retire(e, now) {
     if (e.dieAt < 1e11) return;
     e.dieAt = now;
-    for (const a of e.life) { const arr = a.array; for (let i = 1; i < arr.length; i += 2) arr[i] = now; a.needsUpdate = true; }
+    for (const a of e.life) { const arr = a.array; for (let i = 1; i < arr.length; i += 4) arr[i] = now; a.needsUpdate = true; }
     this.dying.push(e);
   }
 
@@ -175,6 +176,12 @@ export class GrassField {
       if (this.legacy.length > 450) for (const e of this.legacy.splice(0, this.legacy.length - 450)) this._drop(e);
     }
     U.uCenter.value.copy(cp); U.uFar.value = this.maxR * this.scale; U.uFade.value = fade;
+    {                                                                              // the density function the vertex shader thins every blade by (see densAt in the shader)
+      const T = this.tiers, s = this.scale, s2 = s * s;
+      U.uDensR.value.set(T[0].r * s, T[1].r * s, T[2].r * s, 0);
+      U.uDensL.value.set(Math.log(T[0].density / s2), Math.log(T[1].density / s2), Math.log(T[2].density / s2), 0);
+      U.uWidthV.value.set(T[0].wScale, T[1].wScale, T[2].wScale, 0); U.uLevel.value = this.qi;
+    }
     this.group.visible = fade > 0.02;
     if (fade <= 0.02) {                                                            // hidden (zoomed far out): nothing is drawn, so nothing lingers either
       for (const e of this.legacy) this._drop(e); for (const l of this.later) this._drop(l.e); for (const e of this.dying) this._drop(e);
@@ -196,7 +203,7 @@ export class GrassField {
         const mx = (i + 0.5) * C, mz = (j + 0.5) * C;
         const dc = Math.hypot(mx - cp.x, mz - cp.z), dl = Math.hypot(mx - lx, mz - lz), d = Math.min(dc, dl) - C * 0.7;
         let tier = -1;
-        for (let t = 0; t < T.length; t++) if (d < T[t].r * this.scale) { tier = t; break; }
+        for (let t = 0; t < T.length; t++) if (d < T[t].r * this.scale * (t < T.length - 1 ? RAMP_OUT : 1)) { tier = t; break; }      // a denser tier reaches through the whole cross-over to the next one
         if (tier < 0) continue;
         const key = base + (i + 1024) * 2048 + j + 1024, e = this.chunks.get(key);
         if (!e) { want.push({ i, j, tier, key, d }); continue; }
@@ -264,7 +271,7 @@ export function createGrassUniforms(look, noise = createNoiseTexture(256, 17)) {
   const c = a => new THREE.Color(a[0], a[1], a[2]);
   return {
     uTime: { value: 0 }, uStreamT: { value: 0 }, uWindDir: { value: new THREE.Vector2(1.0, 0.35) }, uWind: { value: 0.55 }, uWindSpeed: { value: 1.1 },
-    uPlayer: { value: new THREE.Vector3(1e5, 0, 1e5) }, uFar: { value: 100 }, uCenter: { value: new THREE.Vector3() }, uFade: { value: 1 },
+    uPlayer: { value: new THREE.Vector3(1e5, 0, 1e5) }, uFar: { value: 100 }, uDensR: { value: new THREE.Vector4(26, 62, 108, 0) }, uDensL: { value: new THREE.Vector4(0, 0, 0, 0) }, uWidthV: { value: new THREE.Vector4(1, 1, 1, 0) }, uLevel: { value: 1 }, uCenter: { value: new THREE.Vector3() }, uFade: { value: 1 },
     uLightDirView: { value: new THREE.Vector3(0, 1, 0) }, uSunColor: { value: c(look.sun.color) },
     uTrans: { value: (look.foliage?.translucency ?? 0.9) * 0.8 }, uPow: { value: look.foliage?.translucency_power ?? 3.0 },
     // seasons (env_seasons.js): blade colour multiplier + saturation, blade height multiplier, fraction of blades kept, frost on the tips, ripeness of the seed heads
@@ -280,9 +287,18 @@ function makeGrassMaterial(U, clump) {
     Object.assign(shader.uniforms, U);
     shader.vertexShader = `
       ${clump ? '#define CLUMP' : ''}
-      attribute vec3 iOffset; attribute vec4 iParams; attribute vec3 iTint; attribute vec2 iLife; attribute float aBlade; attribute float aHead;
+      attribute vec3 iOffset; attribute vec4 iParams; attribute vec3 iTint; attribute vec4 iLife; attribute float aBlade; attribute float aHead;
       uniform float uTime, uStreamT, uWind, uWindSpeed, uFar, uFade, uSeasonSat, uSeasonHeight, uSeasonKeep; uniform vec2 uWindDir; uniform vec3 uPlayer, uCenter, uSeasonTint;
       uniform sampler2D tGNoise, tTrample; uniform vec2 uTrOrigin; uniform float uTrExtent;
+      uniform vec4 uDensR, uDensL, uWidthV; uniform float uLevel;
+      // ---- continuous level of detail: density and blade width are smooth functions of the distance from the view focus. Each tier is built at its own density; every blade
+      //      is thinned by a random rank against the SMOOTH density, so there is no ring where the field gets sparser, and the last stretch thins out into nothing.
+      float rampT(float d, float r){ float w = ${RAMP_HALF.toFixed(2)} * r; return smoothstep(r - w, r + w, d); }
+      float densAt(float d){
+        float l = mix(uDensL.x, uDensL.y, rampT(d, uDensR.x)); l = mix(l, uDensL.z, rampT(d, uDensR.y));
+        return exp(l) * (1.0 - smoothstep(uDensR.z * ${FAR_START.toFixed(2)}, uDensR.z, d));
+      }
+      float widthAt(float d){ return mix(mix(uWidthV.x, uWidthV.y, rampT(d, uDensR.x)), uWidthV.z, rampT(d, uDensR.y)); }
       varying vec3 vTint; varying float vT, vBlade, vHead, vPress;
       #ifndef CLUMP
       float gh(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453); }
@@ -305,6 +321,13 @@ function makeGrassMaterial(U, clump) {
         // streaming: a chunk's blades grow in after iLife.x and out after iLife.y (the field never pops); smoothstep of the elapsed fraction
         float glife = smoothstep(0.0, 1.0, (uStreamT - iLife.x) / ${FADE_IN.toFixed(2)}) * (1.0 - smoothstep(0.0, 1.0, (uStreamT - iLife.y) / ${FADE_OUT.toFixed(2)}));
         float gh_ = iParams.y * uSeasonHeight * gkeep * glife, gw_ = iParams.z;
+        float glv = floor(iLife.w * 0.25 + 0.01), gtr = iLife.w - 4.0 * glv;
+        if (abs(glv - uLevel) < 0.5) {                                              // (chunks of the previous zoom level keep their own look until they fade)
+          float gd2 = distance(iOffset.xz, uCenter.xz);
+          float gfr = clamp(densAt(gd2) / iLife.z, 0.0, 1.0), grank = fract(sin(dot(iOffset.xz, vec2(12.9898, 78.233))) * 43758.5453);
+          gh_ *= smoothstep(0.0, 0.18, gfr * 1.18 - grank);                         // thinned blades shrink into the ground instead of vanishing
+          gw_ *= widthAt(gd2) / uWidthV[int(gtr + 0.5)];
+        }
         #ifdef CLUMP
           vec3 glp = vec3(position.x * gw_, position.y * gh_, position.z * gw_);
         #else
@@ -312,7 +335,7 @@ function makeGrassMaterial(U, clump) {
         #endif
         vec3 gwp = iOffset + gRot * glp;
         float gdist = distance(gwp, uCenter);
-        float gfade = (1.0 - smoothstep(uFar * 0.78, uFar, gdist)) * uFade;
+        float gfade = (1.0 - smoothstep(uFar * 0.94, uFar, gdist)) * uFade;
         vec2 gwd = normalize(uWindDir), gpd = vec2(-gwd.y, gwd.x);
         float gbend = vT * vT;
         #ifdef CLUMP

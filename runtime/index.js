@@ -26,3 +26,5 @@ export * from './aquatic.js';
 export * from './fauna.js';
 export * from './grass_clump.js';
 export * from './grass_trample.js';
+export * from './rocks.js';
+export * from './grass_lod.js';

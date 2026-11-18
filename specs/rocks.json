@@ -1,0 +1,14 @@
+{
+  "name": "textures",
+  "size": 1024,
+  "seed": 11,
+  "out_dir": "out",
+  "materials": [
+    "cliff_strata",
+    "granite",
+    "scree",
+    "red_clay",
+    "mossy_rock",
+    "basalt"
+  ]
+}

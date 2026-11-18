@@ -68,6 +68,7 @@ git clone https://github.com/RNT56/agent-skill-blender-export-three.js && cd age
 
 bin/gp test                                  # lint + validator + recipes + textures + goldens + JS (a few minutes, needs Blender)
 bin/gp textures specs/biomes.json            # 13 tileable PBR sets + seam checks      -> out/textures/
+bin/gp textures specs/rocks.json             # 6 cliff / mountain rock sets (orm.b = height map)  -> out/textures/
 bin/gp generate generators/samurai_keep.py   # procedural keep                         -> fixtures/samurai_keep.blend
 bin/gp build specs/samurai_keep_01.json      # recipe -> gate -> GLB -> inspect -> manifest -> preview   -> out/samurai_keep_01/
 bin/gp build specs/tree_maple_01.json        # tree: LOD0-2 + impostor LOD3
@@ -158,8 +159,8 @@ import { createLoader, loadBiomeArrays, applyLook, createSky, createTerrain, Gra
 | Module | What it does |
 |---|---|
 | `assets.js` | GLB loader with meshopt + KTX2; biome PBR texture arrays |
-| `terrain.js` | heightfield, 7-biome splat blending, anti-tiling, tangent-space normals, triplanar cliff rock, shoreline wetness, walkability overlay, seasonal tint + snow |
-| `grass.js`, `grass_clump.js`, `grass_trample.js` | chunked tiers; GLB blades or procedural tall-field clumps with seed heads (rolling wind bands, gust cells, season ripeness); translucency; a persistent trample field (any number of walkers part the grass sideways, press it along their heading, and it springs back over seconds); streaming that never pops (new chunks grow in, replaced ones fade under them, built ahead of the camera within a time budget) |
+| `terrain.js`, `rocks.js` | heightfield, 7-biome splat blending, anti-tiling, tangent-space normals; six cliff / mountain rock materials chosen by slope, altitude and noise (two strongest blended by their height maps, biplanar projection, whiteout normals); the tall-grass field as a colour map so far ground wears the field's colours; contact shading around buildings; shoreline wetness, walkability overlay, seasonal tint + snow. Procedural boulders and outcrops (instanced, 2 LODs) that share the terrain's rock materials in world space |
+| `grass.js`, `grass_clump.js`, `grass_trample.js`, `grass_lod.js` | chunked tiers; GLB blades or procedural tall-field clumps with seed heads (rolling wind bands, gust cells, season ripeness); translucency; a persistent trample field (any number of walkers part the grass sideways, press it along their heading, and it springs back over seconds); streaming that never pops (new chunks grow in, replaced ones fade under them, built ahead of the camera within a time budget); density and blade width follow ONE smooth law of distance (no ring where the field gets sparser, no edge where it ends) |
 | `trees.js`, `foliage.js` | instanced LOD buckets, sway, leaf translucency |
 | `water.js`, `water_waves.js` | wind-driven lake: one wave model shared by GPU and CPU physics, baked-bed shoreline with foam and swash, per-channel absorption, caustics, planar reflection, sun / moon glints, live ripples; `heightAt` / `normalAt` / `depthAt` for floating things |
 | `aquatic.js`, `fauna.js` | reeds with cattails, lily pads and lotus, drifting petals, shore rocks; koi, ducks, dragonflies (instanced, season- and fog-aware) |
