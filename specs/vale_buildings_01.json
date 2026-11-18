@@ -1,0 +1,44 @@
+{
+  "name": "vale_buildings_01",
+  "type": "building",
+  "recipe": "building",
+  "source_blend": "fixtures/vale_buildings.blend",
+  "look": "golden_hour",
+  "budgets": {
+    "max_tris": 110000,
+    "max_materials": 6,
+    "max_texture_px": 1024,
+    "max_file_mb": 20
+  },
+  "lod_budgets": {
+    "LOD0": 82000,
+    "LOD1": 27000,
+    "LOD2": 3000
+  },
+  "rules": {
+    "tiling_uvs": true,
+    "origin_tolerance": 1.0
+  },
+  "recipe_cfg": {
+    "collections": [
+      "vb_LOD0",
+      "vb_LOD1",
+      "vb_LOD2"
+    ]
+  },
+  "glb_expect": {
+    "occlusion": [
+      "vb_stone",
+      "vb_plaster",
+      "vb_wood",
+      "vb_woodl",
+      "vb_tile",
+      "vb_thatch"
+    ]
+  },
+  "export": {
+    "out_dir": "out",
+    "compress": true,
+    "png_fallback": false
+  }
+}

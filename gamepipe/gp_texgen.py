@@ -1071,6 +1071,12 @@ MATERIALS = {
 }
 
 
+# architecture set for the game's wall and building kits (thatch_kaya, wood_shingle, timber_*, stone_nozura, plaster_shikkui, earth_wall, paper_washi)
+sys.path.insert(0, HERE)
+import texgen_arch  # noqa: E402
+texgen_arch.register(globals())
+
+
 # ----------------------------------------------------------------------------- checks
 def seam_ratio(a):
     """Wrap-seam difference / LARGEST neighbouring-line difference, worst of both axes. <= ~1 = seamless.

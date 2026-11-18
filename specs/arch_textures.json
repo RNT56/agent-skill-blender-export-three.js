@@ -1,0 +1,16 @@
+{
+  "name": "textures_arch",
+  "size": 1024,
+  "seed": 11,
+  "out_dir": "out",
+  "materials": [
+    "thatch_kaya",
+    "wood_shingle",
+    "timber_dark",
+    "timber_pale",
+    "stone_nozura",
+    "plaster_shikkui",
+    "earth_wall",
+    "paper_washi"
+  ]
+}

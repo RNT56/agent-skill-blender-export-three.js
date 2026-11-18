@@ -1,0 +1,192 @@
+{
+ "minka": {
+  "w": 7,
+  "d": 6,
+  "h": 5.2,
+  "shape": "hall",
+  "roof": "thatch",
+  "plaster": false,
+  "raised": 0,
+  "chimney": false
+ },
+ "nagaya": {
+  "w": 14,
+  "d": 5.5,
+  "h": 4.6,
+  "shape": "hall",
+  "roof": "tile",
+  "plaster": false,
+  "raised": 0,
+  "chimney": false
+ },
+ "storehouse": {
+  "w": 8,
+  "d": 6,
+  "h": 6.4,
+  "shape": "hall",
+  "roof": "tile",
+  "plaster": true,
+  "raised": 0,
+  "chimney": false
+ },
+ "granary": {
+  "w": 6,
+  "d": 6,
+  "h": 5.8,
+  "shape": "hall",
+  "roof": "thatch",
+  "plaster": false,
+  "raised": 0.9,
+  "chimney": false
+ },
+ "armoury": {
+  "w": 6,
+  "d": 5,
+  "h": 5,
+  "shape": "hall",
+  "roof": "tile",
+  "plaster": true,
+  "raised": 0,
+  "chimney": false
+ },
+ "woodcutter": {
+  "w": 5,
+  "d": 4.5,
+  "h": 3.8,
+  "shape": "hut",
+  "roof": "thatch",
+  "plaster": false,
+  "raised": 0,
+  "chimney": false
+ },
+ "bamboo_cutter": {
+  "w": 5,
+  "d": 4,
+  "h": 3.6,
+  "shape": "hut",
+  "roof": "thatch",
+  "plaster": false,
+  "raised": 0,
+  "chimney": false
+ },
+ "stonecutter": {
+  "w": 6,
+  "d": 5,
+  "h": 3.6,
+  "shape": "shed",
+  "roof": "plank",
+  "plaster": false,
+  "raised": 0,
+  "chimney": false
+ },
+ "clay_pit": {
+  "w": 6,
+  "d": 5,
+  "h": 3,
+  "shape": "shed",
+  "roof": "plank",
+  "plaster": false,
+  "raised": 0,
+  "chimney": false
+ },
+ "iron_mine": {
+  "w": 7,
+  "d": 6,
+  "h": 4,
+  "shape": "shed",
+  "roof": "plank",
+  "plaster": false,
+  "raised": 0,
+  "chimney": false
+ },
+ "fishing_hut": {
+  "w": 5,
+  "d": 4,
+  "h": 3.6,
+  "shape": "hut",
+  "roof": "thatch",
+  "plaster": false,
+  "raised": 0,
+  "chimney": false
+ },
+ "sawpit": {
+  "w": 7,
+  "d": 5,
+  "h": 3.8,
+  "shape": "shed",
+  "roof": "plank",
+  "plaster": false,
+  "raised": 0,
+  "chimney": false
+ },
+ "tatara": {
+  "w": 8,
+  "d": 7,
+  "h": 5.6,
+  "shape": "hall",
+  "roof": "plank",
+  "plaster": false,
+  "raised": 0,
+  "chimney": true
+ },
+ "smithy": {
+  "w": 7,
+  "d": 6,
+  "h": 4.6,
+  "shape": "hall",
+  "roof": "tile",
+  "plaster": false,
+  "raised": 0,
+  "chimney": true
+ },
+ "bowyer": {
+  "w": 6,
+  "d": 5,
+  "h": 4.2,
+  "shape": "hall",
+  "roof": "thatch",
+  "plaster": false,
+  "raised": 0,
+  "chimney": false
+ },
+ "weaver": {
+  "w": 6,
+  "d": 5,
+  "h": 4.2,
+  "shape": "hall",
+  "roof": "thatch",
+  "plaster": false,
+  "raised": 0,
+  "chimney": false
+ },
+ "armourer": {
+  "w": 8,
+  "d": 6,
+  "h": 4.8,
+  "shape": "hall",
+  "roof": "tile",
+  "plaster": false,
+  "raised": 0,
+  "chimney": false
+ },
+ "sake_brewery": {
+  "w": 9,
+  "d": 7,
+  "h": 6,
+  "shape": "hall",
+  "roof": "tile",
+  "plaster": true,
+  "raised": 0,
+  "chimney": false
+ },
+ "dojo": {
+  "w": 11,
+  "d": 8,
+  "h": 6,
+  "shape": "hall",
+  "roof": "tile",
+  "plaster": false,
+  "raised": 0,
+  "chimney": false
+ }
+}

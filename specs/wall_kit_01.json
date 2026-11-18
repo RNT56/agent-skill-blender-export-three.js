@@ -1,0 +1,45 @@
+{
+  "name": "wall_kit_01",
+  "type": "building",
+  "recipe": "building",
+  "source_blend": "fixtures/wall_kit.blend",
+  "look": "golden_hour",
+  "budgets": {
+    "max_tris": 70000,
+    "max_materials": 7,
+    "max_texture_px": 1024,
+    "max_file_mb": 20
+  },
+  "lod_budgets": {
+    "LOD0": 50000,
+    "LOD1": 16000,
+    "LOD2": 3500
+  },
+  "rules": {
+    "tiling_uvs": true,
+    "origin_tolerance": 1.0
+  },
+  "recipe_cfg": {
+    "collections": [
+      "wk_LOD0",
+      "wk_LOD1",
+      "wk_LOD2"
+    ]
+  },
+  "glb_expect": {
+    "occlusion": [
+      "wk_stone",
+      "wk_plaster",
+      "wk_wood",
+      "wk_woodl",
+      "wk_tile",
+      "wk_thatch",
+      "wk_shingle"
+    ]
+  },
+  "export": {
+    "out_dir": "out",
+    "compress": true,
+    "png_fallback": false
+  }
+}
