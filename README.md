@@ -39,7 +39,7 @@ The core idea is a deterministic **gate**. Agents bring judgement (writing recip
 
 - **Verified export.** Per-asset triangle, material, texture and file-size budgets; UV, scale, origin, mesh-hygiene, alpha-mode and *blank-bake* checks; per-LOD budgets inside one multi-LOD GLB.
 - **Compression with no extra tools.** Meshopt geometry + KTX2/BasisU textures through Blender's built-in glTF exporter, plus a small step that strips the duplicate PNG/JPEG fallbacks Blender embeds (21 MB → 5 MB on the hero tree).
-- **Recipes** that turn heavy hero assets into game-ready LODs: tree (leaf cards on a generated atlas, baked bark, impostor LOD), prop/rock, grass blade packs, and multi-material buildings.
+- **Recipes** that turn heavy hero assets into game-ready LODs: tree (leaf cards on a generated atlas, baked bark, impostor LOD), prop/rock, grass blade packs, multi-material buildings, and **characters** (a skinned, rigged, animated hero: LODs, one baked atlas, one glTF animation per clip, with rig and animation gates).
 - **Procedural generators** for architecture (castle keep, thatched farmhouse, waterside teahouse) built from shared geometry code, using world-space UVs so texel density is constant.
 - **Tileable PBR texture generator** (13 sets: biomes, stone, plaster, timber, roof tile, thatch) with an automatic **seam / range / flatness checker that has a negative test**, because a checker that cannot fail proves nothing.
 - **A reusable three.js runtime** (plain ES modules, no build step): biome-blended terrain, GPU wind grass, instanced tree LODs, planar-reflection water, procedural sky, MSAA + bloom + grade, player controller, adaptive resolution.
@@ -73,7 +73,8 @@ bin/gp generate generators/samurai_keep.py   # procedural keep                  
 bin/gp build specs/samurai_keep_01.json      # recipe -> gate -> GLB -> inspect -> manifest -> preview   -> out/samurai_keep_01/
 bin/gp build specs/tree_maple_01.json        # tree: LOD0-2 + impostor LOD3
 bin/gp build specs/grass_blades.json         # wind-ready blade pack for GPU instancing
-bin/gp view                                  # http://localhost:8765/viewer/?asset=samurai_keep_01  (engine check)
+bin/gp build specs/samurai_unit_01.json      # character: rig + LOD0-2 + clips -> out/samurai_unit_01/ (see docs/character.md)
+bin/gp view                                  # http://localhost:8765/viewer/?asset=samurai_keep_01  (engine check; viewer/character.html for characters)
 bin/gp lint my_script.py                     # catch Blender traps before running bpy code
 bin/gp glb out/<asset>/*.glb                 # inspect exported files, no Blender needed
 ```
@@ -100,6 +101,7 @@ The skill's one rule: **never claim an asset is done from your own reading of a 
 | `tree` recipe | bark mesh + leaf mesh (one island per leaf) | LOD0-2 (baked bark, alpha-cut leaf cards, bent normals) + LOD3 crossed-card impostor; palettes `green`, `autumn`, `sakura`, `gold` |
 | `prop` recipe | one mesh with a procedural material | decimated LODs sharing one baked PBR set |
 | `grass` recipe | none (generated) | blade pack: 3 variants × 2 LODs, 30 triangles, `uv.y` = height along the blade |
+| `character` recipe | a procedural rigged samurai (`generators/samurai/`: mesh kit, rig, skin weights, IK pose solver, authored clips) | skinned LOD0-2 + weapon meshes in **one** GLB, one baked atlas, 11 animation clips, `clips.json` (frames, loop, weapon state, stride speed); gates for skin, bone budget, clip loops |
 | `building` recipe | authored multi-material LODs (`<x>_LOD<n>_<Material>`) | **one** GLB with all LODs; textures shared; per-LOD budgets |
 | `gp_texgen` | spec | tileable albedo / normal / ORM sets + contact sheet + seam report |
 | generators | none | `samurai_keep` (23 m castle keep), `minka` (thatched farmhouse), `teahouse` (on stilts, with pier) |
@@ -184,7 +186,7 @@ import { createLoader, loadBiomeArrays, applyLook, createSky, createTerrain, Gra
 
 ```
 gamepipe/        core: texgen, validate, export, glb, lint, cli, live, preview, recipe contract, recipes/
-generators/      procedural architecture (samurai_keep, minka, teahouse) + shared gen_common
+generators/      procedural architecture (samurai_keep, minka, teahouse), the samurai character kit (samurai/), shared gen_common
 runtime/         three.js engine modules
 specs/           asset specs            looks/     shared lighting look
 tools/           export_world.py        viewer/    single-asset engine check
@@ -196,7 +198,7 @@ bin/gp           one entry point        out/       build output (git-ignored)
 ## Limitations (honest)
 
 - **Procedural, not sculpted.** The architecture is generated from code; it is not hand-modelled or scanned fidelity.
-- **Not covered:** skeletal animation and characters, rivers/waves/underwater, terrain streaming, audio, physics.
+- **Not covered:** motion capture and hand-polished animation (the character's clips are authored by code), team-colour masks and facial animation, rivers/underwater, terrain streaming, audio, rigid-body physics.
 - **Lower tree LODs reuse LOD0's normal map**; bark roughness is derived from albedo luminance, not baked from a roughness pass.
 - **Performance** was measured on one machine (Apple M4, Metal, an embedded browser). The adaptive-resolution scaler is untested on slow GPUs.
 - **Validated on Blender 5.3 only.** Several fixes are specific to its glTF exporter (alpha mode from the node graph, KTX2 handling).

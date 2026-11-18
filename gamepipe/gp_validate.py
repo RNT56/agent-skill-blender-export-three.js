@@ -17,6 +17,7 @@ TYPE_DEFAULTS = {
     "rock":  {"require_uv": True, "allow_non_manifold": False, "origin_tolerance": 0.2, "max_height": 30},
     "prop":  {"require_uv": True, "allow_non_manifold": False, "origin_tolerance": 0.05, "max_height": 30},
     "building": {"require_uv": True, "allow_non_manifold": True, "origin_tolerance": 1.0, "max_height": 120, "tiling_uvs": True},
+    "character": {"require_uv": True, "allow_non_manifold": True, "origin_tolerance": 0.05, "max_height": 4},
 }
 BUDGET_DEFAULTS = {"max_tris": 50000, "max_materials": 4, "max_texture_px": 2048, "max_file_mb": 10.0}
 NAME_RE = re.compile(r"^[A-Za-z0-9_]+$")
@@ -196,6 +197,10 @@ def validate(spec):
             mats[slot.material.name if slot.material else f"<empty:{o.name}>"] = (slot.material, o.name)
         if not o.material_slots:
             findings.append(_f("warn", "MAT_NONE", o.name, "no material assigned"))
+
+    if atype == "character":
+        import gp_character
+        findings.extend(gp_character.check(spec, objs))
 
     # --- budgets
     for tag, lim in spec.get("lod_budgets", {}).items():

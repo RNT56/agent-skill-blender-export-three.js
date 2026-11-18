@@ -42,6 +42,7 @@ case "$cmd" in
     echo "== village golden (minka)"; "$BLENDER" -b "$ROOT/fixtures/minka.blend" -P "$ROOT/tests/test_buildings_golden.py" -- minka_01 2>&1 | grep -E "^(ok|FAIL|ALL|FAILED)" || rc=1
     echo "== village golden (teahouse)"; "$BLENDER" -b "$ROOT/fixtures/teahouse.blend" -P "$ROOT/tests/test_buildings_golden.py" -- teahouse_01 2>&1 | grep -E "^(ok|FAIL|ALL|FAILED)" || rc=1
     echo "== runtime js"; bash "$ROOT/tests/test_runtime_js.sh" | grep -E "^(FAIL|ALL|FAILED)" || rc=1
+    echo "== character golden (samurai unit: rig, clips, GLB)"; "$BLENDER" -b "$ROOT/fixtures/samurai_unit.blend" -P "$ROOT/tests/test_character_golden.py" 2>&1 | grep -E "^(ok|FAIL|ALL|FAILED)" || rc=1
     echo "== tree golden"; "$BLENDER" -b "$ROOT/fixtures/tree_source.blend" -P "$ROOT/tests/test_tree_golden.py" 2>&1 | grep -E "^(ok|FAIL|ALL|FAILED)" || rc=1
     exit $rc ;;
   view)       echo "serving http://localhost:8765/viewer/  (Ctrl-C to stop)"; cd "$ROOT" && python3 -m http.server 8765 --bind 127.0.0.1 ;;

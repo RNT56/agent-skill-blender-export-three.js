@@ -1,0 +1,100 @@
+{
+  "name": "samurai_unit_01",
+  "type": "character",
+  "recipe": "character",
+  "source_blend": "fixtures/samurai_unit.blend",
+  "preview": false,
+  "budgets": {
+    "max_tris": 36000,
+    "max_materials": 1,
+    "max_texture_px": 2048,
+    "max_file_mb": 12
+  },
+  "lod_budgets": {
+    "LOD0": 24000,
+    "LOD1": 8000,
+    "LOD2": 2500
+  },
+  "rules": {
+    "origin_tolerance": 0.05
+  },
+  "recipe_cfg": {
+    "collection": "samurai_game"
+  },
+  "character": {
+    "max_bones": 64,
+    "max_influences": 4,
+    "clips": {
+      "idle": {
+        "loop": true
+      },
+      "walk": {
+        "loop": true
+      },
+      "run": {
+        "loop": true
+      },
+      "combat_idle": {
+        "loop": true
+      },
+      "attack_overhead": {
+        "loop": false
+      },
+      "attack_diagonal": {
+        "loop": false
+      },
+      "attack_horizontal": {
+        "loop": false
+      },
+      "attack_thrust": {
+        "loop": false
+      },
+      "block": {
+        "loop": false
+      },
+      "hit": {
+        "loop": false
+      },
+      "death": {
+        "loop": false
+      },
+      "run_drawn": {
+        "loop": true
+      },
+      "draw": {
+        "loop": false
+      },
+      "sheathe": {
+        "loop": false
+      }
+    },
+    "team_mask": "out/samurai_tex/samurai_team.png"
+  },
+  "glb_expect": {
+    "occlusion": [
+      "samurai_mat"
+    ],
+    "joints_max": 64,
+    "animations": [
+      "idle",
+      "walk",
+      "run",
+      "combat_idle",
+      "attack_overhead",
+      "attack_diagonal",
+      "attack_horizontal",
+      "attack_thrust",
+      "block",
+      "hit",
+      "death",
+      "run_drawn",
+      "draw",
+      "sheathe"
+    ]
+  },
+  "export": {
+    "out_dir": "out",
+    "compress": true,
+    "png_fallback": false
+  }
+}

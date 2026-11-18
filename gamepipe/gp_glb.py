@@ -127,7 +127,17 @@ def inspect(path):
         for p in mesh.get("primitives", []):
             if p.get("mode", 4) == 4 and "indices" in p:
                 tris += j["accessors"][p["indices"]]["count"] // 3
+    skins = j.get("skins", [])
+    anims = []
+    for a in j.get("animations", []):
+        dur = 0.0
+        for smp in a.get("samplers", []):
+            mx = j["accessors"][smp["input"]].get("max")
+            if mx:
+                dur = max(dur, float(mx[0]))
+        anims.append({"name": a.get("name"), "channels": len(a.get("channels", [])), "duration": round(dur, 4)})
     return {
+        "skins": len(skins), "joints": max((len(sk.get("joints", [])) for sk in skins), default=0), "animations": anims,
         "meshes": len(j.get("meshes", [])), "triangles": tris, "materials": mats,
         "images": [{"name": i.get("name"), "mime": i.get("mimeType")} for i in j.get("images", [])],
         "textures": len(j.get("textures", [])),
@@ -151,6 +161,16 @@ def check(path, expect=None):
         if not m["baseColorTexture"] and m["alphaMode"] == "MASK":
             out.append({"level": "error", "code": "GLB_MASK_NO_TEXTURE", "object": m["name"],
                         "message": "alpha-cut material has no base colour texture"})
+    if expect and "animations" in expect:
+        have = {a["name"] for a in info["animations"]}
+        for n in expect["animations"]:
+            if n not in have:
+                out.append({"level": "error", "code": "GLB_ANIM_MISSING", "object": n, "message": "expected animation is not in the exported file"})
+        if info["skins"] == 0:
+            out.append({"level": "error", "code": "GLB_NO_SKIN", "object": "-", "message": "no skin exported"})
+        if "joints_max" in expect and info["joints"] > expect["joints_max"]:
+            out.append({"level": "error", "code": "GLB_JOINT_BUDGET", "object": "-",
+                        "message": f"{info['joints']} joints exceeds {expect['joints_max']}"})
     if expect:
         for key, want in expect.get("alphaMode", {}).items():
             for m in info["materials"]:

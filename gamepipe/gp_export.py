@@ -30,7 +30,8 @@ def _supported(kwargs):
 def export_glb(spec, out_dir):
     """Export the spec's objects to <out_dir>/<name>.glb. Returns {path, size_mb, compressed, dropped_options}."""
     objs, _ = resolve_objects(spec)
-    objs = [o for o in objs if o.type in {"MESH", "CURVE"}]
+    is_char = spec.get("type") == "character"
+    objs = [o for o in objs if o.type in ({"MESH", "CURVE", "ARMATURE"} if is_char else {"MESH", "CURVE"})]
     if not objs:
         raise RuntimeError("nothing to export")
     os.makedirs(out_dir, exist_ok=True)
@@ -48,9 +49,13 @@ def export_glb(spec, out_dir):
         filepath=path, export_format="GLB", use_selection=True, export_apply=True, export_yup=True,
         export_texcoords=True, export_normals=True, export_tangents=exp.get("tangents", False),
         export_materials="EXPORT", export_image_format="AUTO",
-        export_cameras=False, export_lights=False, export_animations=False,
+        export_cameras=False, export_lights=False, export_animations=is_char,
         export_draco_mesh_compression_enable=False,
     )
+    if is_char:                      # skinned mesh + one glTF animation per Action (FK keys are already baked in the Actions)
+        kwargs.update(export_skins=True, export_animation_mode="ACTIONS", export_force_sampling=True, export_frame_range=False,
+                      export_optimize_animation_size=True, export_anim_single_armature=True, export_reset_pose_bones=True,
+                      export_influence_nb=4, export_nla_strips=False, export_def_bones=False)
     if compress:
         kwargs.update(
             export_meshopt_compression_enable=True,

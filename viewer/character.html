@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>blend-up character viewer</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #14161a; overflow: hidden; font: 13px/1.4 system-ui, sans-serif; color: #eee; }
+  canvas { display: block; }
+  #ui { position: fixed; top: 12px; left: 12px; background: rgba(0,0,0,.62); padding: 10px 12px; border-radius: 8px; max-width: 420px; }
+  button { background: #2a2a2a; color: #eee; border: 1px solid #555; border-radius: 6px; padding: 4px 10px; margin: 0 4px 4px 0; cursor: pointer; }
+  button.on { background: #c76a1a; border-color: #e58a3a; }
+  #stats { margin-top: 6px; opacity: .9; white-space: pre; font-size: 12px; }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/" } }
+</script>
+</head>
+<body>
+<div id="ui"><div id="clips"></div><div id="lods"></div><div id="stats">loading…</div></div>
+<script type="module">
+// Engine check for a skinned, animated character exported by gamepipe (recipe "character").
+//   http://localhost:8765/viewer/character.html?asset=samurai_unit_01          (bin/gp view serves the repo root)
+// Exposes window.__state / window.report / window.setClip(name, t) / window.setLod(n) for automated checks.
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+const params = new URLSearchParams(location.search);
+const ASSET = params.get('asset') || 'samurai_unit_01';
+const OUT = `../out/${ASSET}/`;
+const errors = [];
+addEventListener('error', e => errors.push(String(e.message)));
+const origErr = console.error; console.error = (...a) => { errors.push(a.join(' ')); origErr(...a); };
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x3a3f47);
+scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environmentIntensity = 0.55;
+const camera = new THREE.PerspectiveCamera(32, innerWidth / innerHeight, 0.05, 100);
+camera.position.set(2.6, 1.5, 3.4);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 0.95, 0);
+controls.update();
+const sun = new THREE.DirectionalLight(0xffe2c0, 3.2);
+sun.position.set(3, 5, 4);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -2.5, right: 2.5, top: 3, bottom: -1, near: 0.5, far: 14 });
+sun.shadow.bias = -0.0004;
+scene.add(sun, new THREE.DirectionalLight(0x9db8ff, 0.8).translateX(-4).translateY(2).translateZ(-3));
+const ground = new THREE.Mesh(new THREE.CircleGeometry(3.2, 64).rotateX(-Math.PI / 2),
+  new THREE.MeshStandardMaterial({ color: 0x4a4f44, roughness: 0.95 }));
+ground.receiveShadow = true;
+scene.add(ground);
+
+const ktx2 = new KTX2Loader().setTranscoderPath('https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/libs/basis/').detectSupport(renderer);
+const loader = new GLTFLoader().setKTX2Loader(ktx2).setMeshoptDecoder(MeshoptDecoder);
+
+const state = { loaded: false, clip: null, lod: 0, t: 0, playing: true };
+window.__state = state;
+window.__view = { camera, controls };
+let mixer, actions = {}, meta = {}, lods = {}, weapons = {}, root, report = {};
+
+function setLod(n) {
+  state.lod = n;
+  for (const [k, m] of Object.entries(lods)) m.visible = Number(k) === n;
+  for (const b of document.querySelectorAll('#lods button')) b.classList.toggle('on', Number(b.dataset.lod) === n);
+}
+function setClip(name, t) {
+  for (const a of Object.values(actions)) a.stop();
+  const a = actions[name];
+  a.reset().play();
+  const m = meta[name];
+  a.setLoop(m && m.loop ? THREE.LoopRepeat : THREE.LoopOnce, Infinity);
+  a.clampWhenFinished = true;
+  if (t !== undefined) { a.time = t; mixer.update(0); state.playing = false; } else state.playing = true;
+  state.clip = name;
+  const drawn = m && m.weapon === 'drawn';
+  if (weapons.drawn) weapons.drawn.visible = drawn;
+  if (weapons.sheathed) weapons.sheathed.visible = !drawn;
+  for (const b of document.querySelectorAll('#clips button')) b.classList.toggle('on', b.textContent === name);
+}
+window.setClip = setClip; window.setLod = setLod;
+
+const bounds = () => { const b = new THREE.Box3().setFromObject(root); return { min: b.min.toArray().map(v => +v.toFixed(3)), max: b.max.toArray().map(v => +v.toFixed(3)) }; };
+
+try { meta = await (await fetch(OUT + 'clips.json?t=' + Date.now())).json(); } catch (e) { errors.push('clips.json: ' + e.message); }
+const gltf = await loader.loadAsync(OUT + ASSET + '.glb?t=' + Date.now());
+root = gltf.scene;
+scene.add(root);
+let skinned = 0, tris = {}, texInfo = [];
+root.traverse(o => {
+  if (o.isMesh) {
+    o.castShadow = true; o.receiveShadow = true;
+    if (o.isSkinnedMesh) { skinned++; o.frustumCulled = false; }      // bind-pose bounds would cull the mesh mid-lunge
+    const idx = o.geometry.index ? o.geometry.index.count / 3 : o.geometry.attributes.position.count / 3;
+    tris[o.name] = Math.round(idx);
+    const m = o.material;
+    for (const k of ['map', 'normalMap', 'metalnessMap', 'aoMap']) if (m[k]) texInfo.push({ mesh: o.name, k, compressed: !!m[k].isCompressedTexture, w: m[k].image && m[k].image.width });
+    const mm = /^Samurai_LOD(\d)/.exec(o.name);
+    if (mm) lods[+mm[1]] = o;
+    if (o.name === 'Katana_Drawn') weapons.drawn = o;
+    if (o.name === 'Katana_Sheathed') weapons.sheathed = o;
+  }
+});
+mixer = new THREE.AnimationMixer(root);
+for (const c of gltf.animations) actions[c.name] = mixer.clipAction(c);
+
+const cb = document.getElementById('clips');
+for (const name of Object.keys(actions)) {
+  const b = document.createElement('button'); b.textContent = name; b.onclick = () => setClip(name); cb.appendChild(b);
+}
+const lb = document.getElementById('lods');
+for (const n of Object.keys(lods)) {
+  const b = document.createElement('button'); b.textContent = 'LOD' + n; b.dataset.lod = n; b.onclick = () => setLod(+n); lb.appendChild(b);
+}
+setLod(0);
+setClip(params.get('clip') || 'combat_idle');
+
+// sanity sweep: sample every clip at 5 times and record the character's bounding box (NaN / explosion guard)
+const sweep = {};
+const prev = state.clip;
+for (const name of Object.keys(actions)) {
+  const dur = actions[name].getClip().duration;
+  sweep[name] = [];
+  for (let i = 0; i < 5; i++) { setClip(name, dur * i / 4 * 0.999); root.updateMatrixWorld(true); sweep[name].push(bounds()); }
+}
+setClip(prev);
+state.playing = true;
+report = { tris, skinnedMeshes: skinned, bones: gltf.parser.json.skins ? gltf.parser.json.skins[0].joints.length : 0,
+  clips: Object.fromEntries(Object.entries(actions).map(([k, a]) => [k, +a.getClip().duration.toFixed(3)])),
+  textures: texInfo, mapIsCompressed: texInfo.every(t => t.compressed), errors, sweep };
+window.report = report;
+state.loaded = true;
+document.getElementById('stats').textContent = `LOD0 ${tris.Samurai_LOD0 || '?'} tris · LOD1 ${tris.Samurai_LOD1 || '?'} · LOD2 ${tris.Samurai_LOD2 || '?'}\n` +
+  `${report.bones} bones · ${Object.keys(actions).length} clips · KTX2 ${report.mapIsCompressed}\nerrors: ${errors.length}`;
+
+const clock = new THREE.Clock();
+renderer.setAnimationLoop(() => {
+  const dt = clock.getDelta();
+  if (state.playing) mixer.update(dt);
+  controls.update();
+  renderer.render(scene, camera);
+});
+addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+</script>
+</body>
+</html>

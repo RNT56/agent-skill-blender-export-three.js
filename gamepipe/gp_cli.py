@@ -97,10 +97,14 @@ def run(spec_path, report_only=False, preview=True, out_override=None):
                              "dimensions_m": r["stats"].get("dimensions_m")})
         manifest = {"asset": spec["name"], "recipe": spec.get("recipe"), "passed": passed, "look": spec.get("look", "golden_hour"),
                     "lods": lods}
+        cj = os.path.join(out_dir, "clips.json")
+        if os.path.exists(cj):
+            with open(cj) as fh:
+                manifest["clips"] = json.load(fh)
         with open(os.path.join(out_dir, "manifest.json"), "w") as fh:
             json.dump(manifest, fh, indent=2)
 
-    if preview and not report_only and passed:
+    if preview and spec.get("preview", True) and not report_only and passed:
         try:
             import copy
             import gp_preview

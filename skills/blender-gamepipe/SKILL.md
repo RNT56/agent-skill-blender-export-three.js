@@ -38,6 +38,7 @@ Blender is auto-detected on macOS; otherwise `export BLENDER=/path/to/Blender`.
 | rock/prop with procedural material | recipe `prop` | LODs sharing one baked PBR set |
 | grass | recipe `grass` | `grass_blades.glb` (3 variants x 2 LODs, 30 tris; uv.y = height along blade) |
 | building (multi-material, authored LODs) | `generators/{samurai_keep,minka,teahouse}.py` (shared `gen_common.py`) then recipe `building` | ONE GLB holding LOD0-2, textures shared |
+| skinned, animated character | `generators/samurai_unit.py` (kit in `generators/samurai/`) then recipe `character` | skinned LOD0-2 + weapon nodes in ONE GLB, one animation per clip, `clips.json`; read `docs/character.md` first |
 | engine | `runtime/*.js` (three.js ES modules) | terrain biomes, wind grass, instanced forests, sky, player |
 | hand-off | `tools/export_world.py` | self-contained game folder |
 
@@ -69,6 +70,7 @@ tabs so fps from an embedded browser is a lower bound, not a measurement.
 | `prop` | one mesh with procedural material | decimated LODs, shared baked set; flat normal maps are omitted |
 | `grass` | none (generated) | blade UV: u across, **v = height 0..1**; Blender Z-up -> glTF Y-up, bend toward -Z |
 | `building` | collections of authored LOD objects named `<x>_LOD<n>_<Material>` | pass-through to the gate; `lod_budgets` enforce per-LOD tris; ONE GLB |
+| `character` | an armature + skinned LOD meshes + Actions (built by `generators/samurai_unit.py`) | gate adds SKIN_* / RIG_BONE_BUDGET / ANIM_* codes; exports skins + one animation per Action; writes `clips.json` into the manifest. See `docs/character.md` |
 
 ## Generators (generators/*.py) - for assets built from code
 `samurai_keep.py`: tenshu on an ishigaki base, ~23 m tall. Method = **geometry for silhouette + tileable PBR at fixed world-scale texel density**
@@ -100,5 +102,5 @@ Read `GOTCHAS.md` before writing bpy or shader code. Highlights: `==` not `is` o
 glTF alpha mode comes from a Round node; KTX2 is exported twice unless stripped; never trust fps from a background tab.
 
 ## Not covered (be honest)
-Skeletal animation/characters, rivers/underwater, terrain streaming/collision beyond circle colliders, audio, rigid-body physics (water surface physics for floating things IS covered), precipitation (the weather state carries `precip` for it). Lower tree LODs reuse LOD0's normal map.
+Motion capture / hand-polished animation (the `character` recipe's clips are authored by code, see docs/character.md), rivers/underwater, terrain streaming/collision beyond circle colliders, audio, rigid-body physics (water surface physics for floating things IS covered), precipitation (the weather state carries `precip` for it). Lower tree LODs reuse LOD0's normal map.
 Roughness is derived from albedo luminance. Procedural modelling is not hand-sculpted/scanned fidelity. KTX2 verified in one browser/GPU (Apple M4 / Metal).
