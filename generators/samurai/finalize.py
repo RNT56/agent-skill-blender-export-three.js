@@ -6,10 +6,28 @@ import bpy
 from . import anim, clips, skin
 
 
-def decimate_copy(src, name, target_tris, arm, coll):
+def decimate_copy(src, name, target_tris, arm, coll, extras=()):
+    """Collapse-decimated, skin-preserving copy of `src` with the `extras` shells (scabbard, sheathed hilt) baked in: fewer draw calls per unit at range."""
     me = src.data.copy()
     tmp = bpy.data.objects.new("_tmp_dec", me)
     bpy.context.scene.collection.objects.link(tmp)
+    if extras:
+        parts = [tmp]
+        for e in extras:
+            c = e.copy()
+            c.data = e.data.copy()
+            c.modifiers.clear()
+            c.parent = None
+            bpy.context.scene.collection.objects.link(c)
+            parts.append(c)
+        for o in bpy.context.view_layer.objects:
+            if o is not None:
+                o.select_set(False)
+        for o in parts:
+            o.select_set(True)
+        bpy.context.view_layer.objects.active = tmp
+        bpy.ops.object.join()
+        me = tmp.data
     tris = sum(len(p.vertices) - 2 for p in me.polygons)
     md = tmp.modifiers.new("dec", "DECIMATE")
     md.decimate_type = "COLLAPSE"
@@ -77,7 +95,7 @@ def bake_clips(arm, names=None, log=print):
     for name, c in clips.CLIPS.items():
         if names and name not in names:
             continue
-        act = anim.bake(arm, sv, name, c["fn"], c["duration"], loop=c["loop"])
+        act = anim.bake(arm, sv, name, c["fn"], c["duration"], loop=c["loop"], speed=float(c.get("speed", 0.0)))
         act["gp_loop"] = int(c["loop"])
         act["gp_weapon"] = c["weapon"]
         act["gp_weapon_end"] = c.get("weapon_end", c["weapon"])
@@ -85,7 +103,7 @@ def bake_clips(arm, names=None, log=print):
         act["gp_fps"] = anim.FPS
         act["gp_speed"] = float(c.get("speed", 0.0))
         out[name] = (act.frame_range[0], act.frame_range[1])
-        log(f"  clip {name}: {int(act.frame_range[1] - act.frame_range[0])} frames")
+        log(f"  clip {name}: {int(act.frame_range[1] - act.frame_range[0])} frames, cloth {act.get('gp_cloth', '-')}")
     arm.animation_data.action = None
     for pb in arm.pose.bones:
         pb.rotation_quaternion = (1, 0, 0, 0)

@@ -68,7 +68,9 @@
         "loop": false
       }
     },
-    "team_mask": "out/samurai_tex/samurai_team.png"
+    "team_mask": "out/samurai_tex/samurai_team.png",
+    "emblems": {"png": "out/samurai_tex/samurai_emblems.png", "json": "out/samurai_tex/samurai_emblems.json"},
+    "cloth": {"json": "out/samurai_tex/samurai_cloth.json"}
   },
   "glb_expect": {
     "occlusion": [

@@ -9,7 +9,7 @@ import math
 from mathutils import Matrix, Vector
 
 from . import body, rig as R
-from .kit import Part, bezier, catmull, frame_from, lerp, param_surf, ring, sstep
+from .kit import Part, basis_matrix, bezier, catmull, frame_from, lerp, param_surf, ring, sstep
 
 V = Vector
 MIRROR_X = Matrix.Scale(-1, 4, Vector((1, 0, 0)))
@@ -122,15 +122,15 @@ def skirt_parts():
         for pi, (c, b) in enumerate(zip(centers, bones)):
             a0, a1 = math.radians(c - 21.0), math.radians(c + 21.0)
             for tier in range(4):
-                z0 = 0.985 - tier * 0.060
+                z0 = 0.979 - tier * 0.060
                 z1 = z0 - 0.066
                 off = 0.018 + 0.0045 * tier
                 P = Part(f"armor_skirt_{sd}{pi}_{tier}", "lamellar", bone=f"{b}.{sd}")
 
                 def fn(s, v, off=off, a0=a0, a1=a1):
                     a = lerp(a0, a1, s / 5.0)
-                    f = (0.985 - v) / 0.30
-                    rx = 0.170 + 0.092 * f + off
+                    f = (0.979 - v) / 0.30
+                    rx = 0.170 + 0.130 * f + off
                     ry = 0.126 + 0.010 * f + off
                     x, y = sup(a, rx, ry, 2.4)
                     return V((x, -0.004 + y, v))
@@ -303,7 +303,7 @@ HB_Z, HB_CY = 1.668, -0.014
 def kabuto_parts():
     parts = []
     # bowl with 24 ridged plates
-    Pb = Part("armor_kabuto_bowl", "lacquer", bone="head")
+    Pb = Part("armor_kabuto_bowl", "kabuto", bone="head")
     zt = 1.795
 
     def fb(s, v):
@@ -346,6 +346,21 @@ def kabuto_parts():
         P.strip(param_surf(fs, inside=HEAD_AX), 24, z0, z1, nv=1, relief=0.0028, thick=0.0045, groove=0.15, row=40 + tier)
         parts.append(P)
 
+    # a cloth lining just inside the shikoro: the plates are single-sided, so from the front the far side showed bare lacing; the lining closes the neck guard from inside
+    Lg = Part("armor_shikoro_lining", "hemp", bone="head", sharp=60)
+
+    def fl(s, t):
+        v = lerp(HB_Z - 0.004, HB_Z - 0.163, t)                      # slab parameters run 0..1: top to bottom of the five tiers
+        a = math.radians(lerp(-48.0, 228.0, s))
+        f = (HB_Z - v) / 0.17
+        rx = 0.100 + 0.118 * f + 0.006 - 0.0125
+        ry = 0.118 + 0.062 * f + 0.006 - 0.0125
+        x, y = sup(a, rx, ry, 2.3)
+        return V((x, HB_CY + 0.012 * f + y, v))
+
+    Lg.slab(param_surf(fl, inside=lambda p: p + (p - V((0.0, HB_CY, p.z))) * 5.0), 12, 4, 0.003, uvf=lambda u, v: (u * 0.7, v * 0.17))      # normals inward: the visible face is the inner one
+    parts.append(Lg)
+
     # fukigaeshi wings with gold rosettes + visor
     for sd, sx in (("L", 1.0), ("R", -1.0)):
         W = Part(f"armor_wing_{sd}", "lacquer", bone="head")
@@ -365,7 +380,7 @@ def kabuto_parts():
         for k in range(8):
             ang = k / 8 * math.tau
             pc = c0 + (u * math.cos(ang) + w * math.sin(ang)) * 0.023 + n * 0.004
-            G.sphere(pc, 0.0085, 0.0085, 0.0045, 6, 3)
+            G.box(pc, 0.0068, 0.0068, 0.0036, rot=basis_matrix(u * math.cos(ang) + w * math.sin(ang), -u * math.sin(ang) + w * math.cos(ang), n))      # petals: tilted boxes (12 triangles, spheres were 24)
         parts.append(G)
     Vz = Part("armor_visor", "lacquer", bone="head")
 
@@ -412,11 +427,16 @@ def mask_xy(z, a, off=0.011):
 
 def menpo_parts():
     parts = []
-    M = Part("armor_menpo", "iron", bone="head", sharp=48)
+    M = Part("armor_menpo", "menpo", bone="head", sharp=48)
     rings = []
     zs = [1.512 + 0.0128 * i for i in range(10)]
     for z in zs:
-        rings.append([V((*mask_xy(z, math.tau * j / 28 + 0.0), z)) for j in range(28)])
+        ring_pts = []
+        for j in range(28):
+            x, y = mask_xy(z, math.tau * j / 28 + 0.0)
+            w = min(1.0, max(0.0, (z - 1.560) / 0.066))                     # only the upper rows: the rim sweeps down toward the cheeks and rises over the nose bridge (a flat top read as a shelf)
+            ring_pts.append(V((x, y, z - 0.016 * w * min(1.0, (abs(x) / 0.075) ** 2))))
+        rings.append(ring_pts)
     M.loft(rings, True, (True, True))
     parts.append(M)
     T = Part("armor_menpo_teeth", "teeth", bone="head")
@@ -428,14 +448,14 @@ def menpo_parts():
         yy = -(ry + 0.011) * math.sqrt(max(0.0, 1 - (x / (rx + 0.011)) ** 2)) + cy + 0.006
         T.box((x, yy - 0.0035, z), 0.0034, 0.0030, 0.0055)
     parts.append(T)
-    H = Part("armor_menpo_stache", "white", bone="head", sharp=70)
-    for sd in (1, -1):
-        for k, (dz, dx) in enumerate(((0.000, 0.060), (-0.006, 0.066), (0.006, 0.054))):
+    H = Part("armor_menpo_stache", "hair", bone="head", sharp=70)
+    for sd in (1, -1):                                                           # two swept tufts per side (the first version was six white tubes: 600 triangles)
+        for k, (dz, dx) in enumerate(((0.002, 0.064), (-0.006, 0.058))):
             z0 = 1.570 + dz
             pts = [V((sd * 0.006, mask_xy(z0, -math.pi / 2)[1] - 0.004, z0)), V((sd * 0.030, mask_xy(z0, -math.pi / 2 + sd * 0.35)[1] - 0.006, z0 + 0.004)),
                    V((sd * dx, mask_xy(z0 - 0.012, -math.pi / 2 + sd * 0.8)[1] - 0.004, z0 - 0.004)),
-                   V((sd * (dx + 0.012), mask_xy(z0 - 0.025, -math.pi / 2 + sd * 1.0)[1] - 0.002, z0 - 0.020))]
-            H.tube(catmull(pts, 3), lambda t: (0.0065 * (1 - 0.7 * t), 0.0055 * (1 - 0.7 * t)), 5, (True, True))
+                   V((sd * (dx + 0.012), mask_xy(z0 - 0.025, -math.pi / 2 + sd * 1.0)[1] - 0.002, z0 - 0.022))]
+            H.tube(catmull(pts, 2), lambda t: (0.0078 * (1 - 0.75 * t), 0.0062 * (1 - 0.75 * t)), 5, (True, True))
     parts.append(H)
     K = Part("armor_menpo_cords", "lacing", bone="head", sharp=70)
     for sd in (1, -1):

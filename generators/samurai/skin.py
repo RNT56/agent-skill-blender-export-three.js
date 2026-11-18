@@ -7,6 +7,7 @@ from mathutils import Vector
 
 REGION = {
     "torso": (["hips", "spine", "spine1", "chest", "neck"], 0.085),
+    "banner": (["chest", "banner_1", "banner_2"], 0.16),
 }
 for _s in ("L", "R"):
     # the sleeve ends at the wrist and the rigid kote cuffs ride the forearm: no hand influence, so the cuff never separates from them
@@ -39,6 +40,37 @@ def soft_weights(co, segs, sigma):
     return {n: w / tot for w, n in ws}
 
 
+def _smooth(a, b, x):
+    t = max(0.0, min(1.0, (x - a) / (b - a)))
+    return t * t * (3 - 2 * t)
+
+
+def tail_weights(key, co, bones):
+    """Obi tail: the chain bones by distance along the tail, but the root ring stays on the hips (blend over the first 5 cm) so a twisting torso never tears the tail off the knot."""
+    from . import cloth as C
+    segs = {n: bones[n] for n in (f"sash_{key}1", f"sash_{key}2")}
+    ws = soft_weights(co, segs, 0.05)
+    t = _smooth(C.SASH_Z - 0.05, C.SASH_Z, co.z)                      # 1 at the root, 0 five centimetres below
+    out = {n: w * (1.0 - t) for n, w in ws.items()}
+    if t > 1e-4:
+        out["hips"] = t
+    return {n: w for n, w in out.items() if w > 1e-4}
+
+
+def flag_weights(co, bones):
+    """Flag cloth: along the cloth by distance to the three flag bones (the chain line at mid height, so only x matters); the top edge hangs from the cross bar, so the
+    chain's influence fades in over the first half of the cloth's height and the rest follows the pole (banner_2)."""
+    from .consts import CLOTH_H, TOP
+    segs = {n: bones[n] for n in ("flag_1", "flag_2", "flag_3")}
+    mid = segs["flag_1"][0]
+    probe = Vector((co.x, mid.y, mid.z))
+    ws = soft_weights(probe, segs, 0.045)
+    g = _smooth(0.0, 0.45, (TOP - 0.004 - co.z) / CLOTH_H)
+    out = {n: w * g for n, w in ws.items()}
+    out["banner_2"] = 1.0 - g
+    return {n: w for n, w in out.items() if w > 1e-4}
+
+
 def apply_weights(ob, arm_obj):
     """Create vertex groups on `ob` from its gp_bone / gp_soft tags."""
     me = ob.data
@@ -55,6 +87,14 @@ def apply_weights(ob, arm_obj):
     if bone:
         g = vg(bone)
         g.add(list(range(len(me.vertices))), 1.0, "REPLACE")
+    elif soft and soft.startswith("tail:"):
+        for v in me.vertices:
+            for n, w in tail_weights(soft.split(":")[1], v.co, bones).items():
+                vg(n).add([v.index], w, "REPLACE")
+    elif soft == "flag":
+        for v in me.vertices:
+            for n, w in flag_weights(v.co, bones).items():
+                vg(n).add([v.index], w, "REPLACE")
     elif soft:
         cand, sigma = REGION[soft]
         segs = {n: bones[n] for n in cand}

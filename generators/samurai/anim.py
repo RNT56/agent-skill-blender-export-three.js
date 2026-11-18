@@ -2,12 +2,13 @@
 finger curl, sode / kusazuri secondary motion). Clips (clips.py) are functions t -> params; `solve` turns params into a Pose,
 `bake` writes one Action of FK keys per clip. Space: armature space, +Z up, character faces -Y, left = +X.
 """
+import json
 import math
 
 import bpy
 from mathutils import Euler, Matrix, Quaternion, Vector
 
-from . import katana as K, rig as R
+from . import cloth as cloth_mod, katana as K, rig as R
 from .pose import Pose, Rig, key_pose
 
 V = Vector
@@ -187,8 +188,9 @@ class Solver:
         return p
 
 
-def bake(arm_obj, solver, name, fn, duration, loop=True, fps=FPS):
-    """Sample params fn(t) (t in seconds) and write one Action of FK keys. Looping clips repeat frame 0 at the end."""
+def bake(arm_obj, solver, name, fn, duration, loop=True, fps=FPS, speed=0.0, cloth=True):
+    """Solve every frame of the clip, simulate the cloth chains on that body motion (cloth.py), then write one Action of FK keys.
+    Looping clips repeat frame 0 at the end. `speed` (m/s of the clip's locomotion) is the headwind the cloth feels."""
     arm_obj.animation_data_create()
     act = bpy.data.actions.new(name)
     act.use_fake_user = True
@@ -196,11 +198,16 @@ def bake(arm_obj, solver, name, fn, duration, loop=True, fps=FPS):
     for pb in arm_obj.pose.bones:
         pb.rotation_mode = "QUATERNION"
     n = int(round(duration * fps))
+    poses = []
     for f in range(n + 1):
         t = duration * f / n
         if loop and f == n:
             t = 0.0
-        pose = solver.solve(fn(t))
+        poses.append(solver.solve(fn(t)))
+    if cloth:
+        diag = cloth_mod.simulate(solver.rig, poses, loop, duration, speed, name)
+        act["gp_cloth"] = json.dumps(diag)
+    for f, pose in enumerate(poses):
         key_pose(arm_obj, pose, 1 + f)
     act.frame_range = (1, 1 + n)
     # linear-safe: leave Blender's default Bezier (sampled densely, so it is nearly identical to linear)

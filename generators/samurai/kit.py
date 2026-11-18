@@ -157,7 +157,7 @@ class Part:
         self.tube([a, b], lambda t: (lerp(r0, r1, t), lerp(r0, r1, t) * ratio), n, caps)
 
     # ---------------------------------------------------------------- slabs and lamellar strips
-    def slab(self, surf, nu, nv, thick, chamfer=0.0, uvf=None, flip=False):
+    def slab(self, surf, nu, nv, thick, chamfer=0.0, uvf=None, flip=False, two_sided=False):
         """A curved plate of thickness `thick` hanging below the surface surf(u, v) -> (point, normal), u,v in 0..1.
 
         The top surface is inset by `chamfer` (in u/v) so the rim is a sloped bevel. Closed solid."""
@@ -185,7 +185,11 @@ class Part:
             for i in range(nu):
                 self.face([top[j][i], top[j][i + 1], top[j + 1][i + 1], top[j + 1][i]],
                           [uvx(i / nu, j / nv), uvx((i + 1) / nu, j / nv), uvx((i + 1) / nu, (j + 1) / nv), uvx(i / nu, (j + 1) / nv)])
-                self.face([bot[j][i], bot[j + 1][i], bot[j + 1][i + 1], bot[j][i + 1]], [(0, 0)] * 4, hid=True)
+                if two_sided:      # cloth that is seen from both sides (a banner): the back face is a real, textured face
+                    self.face([bot[j][i], bot[j + 1][i], bot[j + 1][i + 1], bot[j][i + 1]],
+                              [uvx(i / nu, j / nv), uvx(i / nu, (j + 1) / nv), uvx((i + 1) / nu, (j + 1) / nv), uvx((i + 1) / nu, j / nv)])
+                else:
+                    self.face([bot[j][i], bot[j + 1][i], bot[j + 1][i + 1], bot[j][i + 1]], [(0, 0)] * 4, hid=True)
         for i in range(nu):
             self.face([top[0][i], bot[0][i], bot[0][i + 1], top[0][i + 1]], [(0, 0)] * 4)
             self.face([top[nv][i + 1], bot[nv][i + 1], bot[nv][i], top[nv][i]], [(0, 0)] * 4)

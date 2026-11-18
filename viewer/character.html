@@ -30,6 +30,8 @@ import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { loadTeamAssets, teamMaterial } from './team_emblem.js';
+import { ClothWindRig, relativeAir, gustAt, WIND_MS } from './cloth_wind.js';
 
 const params = new URLSearchParams(location.search);
 const ASSET = params.get('asset') || 'samurai_unit_01';
@@ -87,7 +89,7 @@ function setClip(name, t) {
   const m = meta[name];
   a.setLoop(m && m.loop ? THREE.LoopRepeat : THREE.LoopOnce, Infinity);
   a.clampWhenFinished = true;
-  if (t !== undefined) { a.time = t; mixer.update(0); state.playing = false; } else state.playing = true;
+  if (t !== undefined) { a.time = t; stepMixer(0); state.playing = false; } else state.playing = true;
   state.clip = name;
   const drawn = m && m.weapon === 'drawn';
   if (weapons.drawn) weapons.drawn.visible = drawn;
@@ -117,8 +119,34 @@ root.traverse(o => {
     if (o.name === 'Katana_Sheathed') weapons.sheathed = o;
   }
 });
+// team colour + faction emblem: ?team=0|1 (default 0) and optionally ?emblem=<cell>; the asset's own material is replaced by the team copy (the contract in team_emblem.js)
+const TEAM_TINT = [new THREE.Color(0.80, 0.09, 0.11), new THREE.Color(0.10, 0.34, 0.92)], TEAM_EMBLEM = [1, 3];
+let teamAssets = null;
+try { teamAssets = await loadTeamAssets(OUT + ASSET); } catch (e) { errors.push('team assets: ' + e.message); }
+const team = +(params.get('team') || 0);
+if (teamAssets) {
+  const tm = teamMaterial(root.getObjectByProperty('isSkinnedMesh', true).material, { mask: teamAssets.mask, tint: TEAM_TINT[team] || TEAM_TINT[0], emblemTex: teamAssets.emblemTex, emblemMeta: teamAssets.emblemMeta,
+    emblem: +(params.get('emblem') || TEAM_EMBLEM[team] || 0) });
+  root.traverse(o => { if (o.isMesh) o.material = tm; });
+}
 mixer = new THREE.AnimationMixer(root);
 for (const c of gltf.animations) actions[c.name] = mixer.clipAction(c);
+
+// WIND: the clips are baked dry; cloth_wind.js adds the wind to the flag, the pole and the tails per frame (contract: docs/character.md "Cloth").
+//   ?wind=<m/s> (default 3.5; 0 = calm)  ?winddir=<degrees> (0 = toward +x, 90 = toward +z, the unit faces +z)  - a clip that moves (walk, run) adds its own headwind
+let clothWind = null;
+try { const cj = await (await fetch(OUT + ASSET + '.cloth.json?t=' + Date.now())).json(); clothWind = new ClothWindRig(THREE, root, cj, 1); } catch (e) { errors.push('cloth.json: ' + e.message); }
+const WIND = { ms: +(params.get('wind') ?? 3.5), deg: +(params.get('winddir') ?? 0) };
+window.__wind = WIND;
+let simT = 0;
+function stepMixer(dt) {
+  if (clothWind) clothWind.restore();                    // chain bones the clip does not animate must not keep last frame's wind rotation
+  mixer.update(dt);
+  if (!clothWind) return;
+  simT += dt;
+  const a = WIND.deg * Math.PI / 180, dx = Math.cos(a), dz = Math.sin(a), sp = (meta[state.clip] && meta[state.clip].speed_mps) || 0;
+  clothWind.update(dt, simT, relativeAir(dx, dz, WIND.ms / WIND_MS, gustAt(simT, 0, 0, dx, dz), { x: 0, z: sp }, 0));
+}
 
 const cb = document.getElementById('clips');
 for (const name of Object.keys(actions)) {
@@ -143,7 +171,7 @@ setClip(prev);
 state.playing = true;
 report = { tris, skinnedMeshes: skinned, bones: gltf.parser.json.skins ? gltf.parser.json.skins[0].joints.length : 0,
   clips: Object.fromEntries(Object.entries(actions).map(([k, a]) => [k, +a.getClip().duration.toFixed(3)])),
-  textures: texInfo, mapIsCompressed: texInfo.every(t => t.compressed), errors, sweep };
+  textures: texInfo, mapIsCompressed: texInfo.every(t => t.compressed), errors, sweep, cloth: clothWind ? clothWind.chains.map(c => c.desc.name) : [] };
 window.report = report;
 state.loaded = true;
 document.getElementById('stats').textContent = `LOD0 ${tris.Samurai_LOD0 || '?'} tris · LOD1 ${tris.Samurai_LOD1 || '?'} · LOD2 ${tris.Samurai_LOD2 || '?'}\n` +
@@ -152,7 +180,7 @@ document.getElementById('stats').textContent = `LOD0 ${tris.Samurai_LOD0 || '?'}
 const clock = new THREE.Clock();
 renderer.setAnimationLoop(() => {
   const dt = clock.getDelta();
-  if (state.playing) mixer.update(dt);
+  if (state.playing) stepMixer(dt);
   controls.update();
   renderer.render(scene, camera);
 });

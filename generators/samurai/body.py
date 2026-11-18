@@ -51,15 +51,15 @@ def head_radii(z):
 def head_part():
     """Skin head + neck: a sculpted ellipsoid; the menpo and kabuto hide most of it, the brow/eye band stays visible."""
     P = Part("body_head", "skin", bone="head", sharp=80)
-    nz, nu = 14, 22
+    # rows and columns are dense only where the face shows (brow / eye band 1.59-1.70 m, the front +-70 degrees): the mask, the visor and the bowl hide the rest
+    zs = [HEAD_Z0 + 0.034 * k for k in range(1, 3)] + [1.590 + 0.007 * k for k in range(17)] + [1.730, 1.752]
+    angles = [0, 40, 80, 120, 160, 190] + list(range(205, 336, 10)) + [350]
     rings = []
-    for i in range(1, nz):
-        t = i / nz
-        z = HEAD_Z0 + (HEAD_Z1 - HEAD_Z0) * t
+    for z in zs:
         rx, ry, cy = head_radii(z)
         ring_pts = []
-        for j in range(nu):
-            a = math.tau * j / nu
+        for ad in angles:
+            a = math.radians(ad)
             ca, sa = math.cos(a), math.sin(a)          # a=0 -> +X (left), a=-90deg -> front (-Y)
             x, y = ca * rx, sa * ry
             front = max(0.0, -sa)
@@ -81,16 +81,19 @@ def eyes_part():
     P = Part("body_eyes", "eye", bone="head", sharp=80)
     I = Part("body_iris", "iris", bone="head", sharp=80)
     L = Part("body_lids", "skin", bone="head", sharp=80)
-    Bw = Part("body_brow", "iris", bone="head", sharp=80)
+    Bw = Part("body_brow", "hair", bone="head", sharp=80)
+    Ln = Part("body_lash", "iris", bone="head", sharp=80)
     for sx in (1, -1):
         cx, cy, cz = sx * 0.031, -0.099, 1.652
-        P.sphere((cx, cy, cz), 0.0090, 0.0042, 0.0038, 8, 5)
-        I.cyl((cx, cy - 0.0036, cz), (cx, cy - 0.0050, cz), 0.0027, 0.0027, 8)
-        L.sphere((cx, cy - 0.0020, cz + 0.0042), 0.0105, 0.0058, 0.0026, 6, 3)       # upper lid
-        L.sphere((cx, cy - 0.0016, cz - 0.0036), 0.0098, 0.0050, 0.0020, 6, 3)       # lower lid
-        pts = [V((sx * 0.012, -0.1075, 1.672)), V((sx * 0.032, -0.1090, 1.678)), V((sx * 0.054, -0.1000, 1.670))]
-        Bw.tube(catmull(pts, 3), lambda t: (0.0042, 0.0030), 6, (True, True))
-    return [P, I, L, Bw]
+        P.sphere((cx, cy, cz), 0.0125, 0.0046, 0.0050, 8, 5)                        # sclera: 25 mm wide
+        I.sphere((cx - sx * 0.0004, cy - 0.0030, cz - 0.0004), 0.0047, 0.0030, 0.0047, 7, 4)       # iris, partly hidden by the lids: a calm, hard stare
+        L.sphere((cx, cy - 0.0018, cz + 0.0053), 0.0133, 0.0060, 0.0034, 6, 3)       # upper lid, covers the top quarter of the iris
+        L.sphere((cx, cy - 0.0014, cz - 0.0049), 0.0125, 0.0052, 0.0024, 6, 3)       # lower lid
+        lash = [V((sx * 0.0185, cy - 0.0050, cz + 0.0012)), V((sx * 0.0310, cy - 0.0069, cz + 0.0040)), V((sx * 0.0445, cy - 0.0046, cz + 0.0016))]
+        Ln.tube(catmull(lash, 2), lambda t: (0.0011, 0.0011), 4, (True, True))      # dark lash line along the upper lid
+        pts = [V((sx * 0.011, -0.1065, 1.665)), V((sx * 0.031, -0.1105, 1.676)), V((sx * 0.055, -0.1000, 1.682))]      # stern brow: low and thick at the nose, lifted at the temple
+        Bw.tube(catmull(pts, 3), lambda t: (0.0058 - 0.0016 * t, 0.0036), 6, (True, True))
+    return [P, I, L, Bw, Ln]
 
 
 def _finger(F, h1, t1, t2, nrm, r0, lens=(0.5, 0.30, 0.20), curl=0.5):
@@ -182,12 +185,21 @@ def sash_part():
             rr.append(V((math.cos(a) * base_rx * k, -0.004 + math.sin(a) * base_ry * k, z)))
         rings.append(rr)
     P.loft(rings, True, (True, True))
-    # knot (left-front) + tails
+    # knot (left-front); the two tails are their own parts (sash_tail_parts)
     P.sphere((0.075, -0.132, 1.04), 0.046, 0.030, 0.040, 10, 6)
-    for sx, drop in ((0.045, 0.20), (0.105, 0.24)):
-        P.tube([V((sx, -0.150, 1.02)), V((sx + 0.01, -0.160, 1.02 - drop * 0.5)), V((sx + 0.02, -0.158, 1.02 - drop))],
-               lambda t: (0.020 - 0.004 * t, 0.006), 6, (True, True))
     return P
+
+
+def sash_tail_parts():
+    """The two obi tails (separate parts: the cloth simulation drives them). Five rings on two bones: each bone owns two ring spans, so the tail bends instead of kinking."""
+    from . import cloth as C
+    out = []
+    for key in "ab":
+        j0, j1, j2 = C.sash_joints(key)
+        T = Part(f"cloth_sash_tail_{key}", "sash", soft=f"tail:{key}")
+        T.tube([j0, (j0 + j1) * 0.5, j1, (j1 + j2) * 0.5, j2], lambda t: (0.020 - 0.004 * t, 0.006), 6, (True, True))
+        out.append(T)
+    return out
 
 
 def _lc(z, sx):
@@ -248,7 +260,7 @@ def sandal_parts(side):
 
 
 def all_soft(rig_table):
-    parts = [head_part()] + eyes_part() + [torso_robe(), sash_part()]
+    parts = [head_part()] + eyes_part() + [torso_robe(), sash_part()] + sash_tail_parts()
     for sd in ("L", "R"):
         parts += hand_parts(sd, rig_table)
         parts += [sleeve_part(sd), trouser_part(sd), leg_wrap_part(sd), foot_part(sd)]

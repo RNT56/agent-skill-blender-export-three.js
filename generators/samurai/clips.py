@@ -192,9 +192,32 @@ def _attack(keys_list, T):
     return lambda t: fix(keyed(ks, t))
 
 
+FOOT_SLIDE_FROM = 0.20        # m/s of horizontal foot speed above which a foot is considered to be stepping, not planted
+
+
+def lift_sliding_feet(P, Pa, Pb, dt):
+    """A keyed foot that travels is a step: lift it (and point the toe) in proportion to its speed, so a lunge never skates along the ground."""
+    for foot in ("footL", "footR"):
+        if not P.get(foot):
+            continue
+        d = V(Pb[foot]["pos"]) - V(Pa[foot]["pos"])
+        d.z = 0.0
+        lift = min(0.08, max(0.0, (d.length / dt - FOOT_SLIDE_FROM) * 0.06))
+        if lift > 0:
+            p = V(P[foot]["pos"])
+            P[foot]["pos"] = V(p.x, p.y, p.z + lift)
+            P[foot]["pitch"] = P[foot].get("pitch", 0.0) + lift * 380.0 * (1.0 if d.y < 0 else 0.35)    # toe leads when stepping forward
+    return P
+
+
 def _make(keylist, T):
     ks = [(a * T, b) for a, b in keylist]
-    return lambda t: fix(keyed(ks, t))
+
+    def f(t):
+        P = fix(keyed(ks, t))
+        h = 0.03
+        return lift_sliding_feet(P, fix(keyed(ks, max(0.0, t - h))), fix(keyed(ks, min(T, t + h))), 2 * h)
+    return f
 
 
 def attack_overhead(t):

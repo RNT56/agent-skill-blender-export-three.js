@@ -44,6 +44,23 @@ def build(spec, out_dir):
         src = mask if os.path.isabs(mask) else os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), mask)
         if os.path.exists(src):
             shutil.copyfile(src, os.path.join(out_dir, f"{spec['name']}.team.png"))
+    emb = spec.get("character", {}).get("emblems")
+    if emb:                                      # faction crests for the banner: a signed-distance sheet + its json (cell layout, banner region): required, a missing sheet must fail the build
+        import shutil
+        root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        for key, suffix in (("png", "emblems.png"), ("json", "emblems.json")):
+            src = emb[key] if os.path.isabs(emb[key]) else os.path.join(root, emb[key])
+            if not os.path.exists(src):
+                raise FileNotFoundError(f"character.emblems.{key} declared but missing: {src} (run the generator with --bake)")
+            shutil.copyfile(src, os.path.join(out_dir, f"{spec['name']}.{suffix}"))
+    clo = spec.get("character", {}).get("cloth")
+    if clo:                                      # the runtime cloth descriptor (chains, rest directions): the clips are baked dry and the engine adds the wind; required when declared
+        import shutil
+        root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        src = clo["json"] if os.path.isabs(clo["json"]) else os.path.join(root, clo["json"])
+        if not os.path.exists(src):
+            raise FileNotFoundError(f"character.cloth.json declared but missing: {src} (run the generator with --bake)")
+        shutil.copyfile(src, os.path.join(out_dir, f"{spec['name']}.cloth.json"))
     with open(os.path.join(out_dir, "clips.json"), "w") as fh:
         json.dump(clips, fh, indent=2)
     return [{

@@ -98,6 +98,166 @@ for name, c in clips.CLIPS.items():
     if has_sword:
         check(f"{name}: sword stays within 6 cm of its authored path (the grip never opens)", worst < 0.06, f"{worst * 1000:.1f} mm")
 
+# ---- 3b2. no skating: a foot that stays near the ground may not travel far (steps lift the foot)
+for name in ("attack_overhead", "attack_diagonal", "attack_horizontal", "attack_thrust", "draw", "hit", "block"):
+    c = clips.CLIPS[name]
+    prev, skate = None, {"footL": 0.0, "footR": 0.0}
+    for k in range(int(c["duration"] / 0.02) + 1):
+        P = c["fn"](k * 0.02)
+        if prev is not None:
+            for ft in skate:
+                a, b2 = prev[ft]["pos"], P[ft]["pos"]
+                if b2.z - 0.092 < 0.015:
+                    skate[ft] += Vector((b2.x - a.x, b2.y - a.y, 0)).length
+        prev = {ft: {"pos": P[ft]["pos"].copy()} for ft in skate}
+    check(f"{name}: planted-height foot travel <= 0.20 m (skating)", max(skate.values()) <= 0.20, f"{max(skate.values()):.3f} m")
+
+# ---- 3b3. LOD1 / LOD2 carry the scabbard (weapon_hip weights) so the engine needs no extra node there
+for lod, need in (("Samurai_LOD1", 40), ("Samurai_LOD2", 15)):
+    o = bpy.data.objects[lod]
+    gi = o.vertex_groups["weapon_hip"].index
+    n = sum(1 for v in o.data.vertices if any(g.group == gi and g.weight > 0.5 for g in v.groups))
+    check(f"{lod} carries the scabbard ({n} vertices weighted to weapon_hip)", n >= need, str(n))
+
+# ---- 3b4. the sashimono banner: its own node (LOD0) and baked into LOD1 / LOD2, weighted to the cloth bones
+sash = bpy.data.objects["Sashimono"]
+cloth_bones = ("banner_1", "banner_2", "flag_1", "flag_2", "flag_3")
+gi_s = {n: sash.vertex_groups[n].index for n in cloth_bones if n in sash.vertex_groups}
+nb = sum(1 for v in sash.data.vertices if any(g.group in gi_s.values() and g.weight > 0.3 for g in v.groups))
+check(f"Sashimono is weighted to the banner / flag bones ({nb} of {len(sash.data.vertices)} vertices)", nb >= 0.6 * len(sash.data.vertices), str(nb))
+for lod, need in (("Samurai_LOD1", 8), ("Samurai_LOD2", 6)):                 # a flat cloth decimates to its corners: a handful of vertices is the whole banner
+    o = bpy.data.objects[lod]
+    gis = [o.vertex_groups[n].index for n in cloth_bones if n in o.vertex_groups]
+    n = sum(1 for v in o.data.vertices if any(g.group in gis and g.weight > 0.3 for g in v.groups))
+    up = [v.co for v in o.data.vertices if v.co.y > 0.15 and v.co.z > 1.8]       # everything behind the back and above the helmet: pole + cloth
+    ext = (max(v.z for v in up) - min(v.z for v in up), max(v.x for v in up) - min(v.x for v in up)) if up else (0.0, 0.0)
+    check(f"{lod} carries the banner ({n} vertices on the banner bones, {ext[0]:.2f} m tall, {ext[1]:.2f} m wide)", n >= need and ext[0] >= 0.5 and ext[1] >= 0.2, str((n, ext)))
+
+# ---- 3b5. cloth simulation (cloth.py): the chains exist, move with the body, are finite, loop exactly, and are deterministic
+_fcurves = gp_character._fcurves
+from samurai import cloth as _cloth
+
+
+def _quat_curves(action, bone):
+    fcs = action.fcurves if hasattr(action, "fcurves") else _fcurves(action)
+    byi = {f.array_index: f for f in fcs if f.data_path == f'pose.bones["{bone}"].rotation_quaternion'}
+    return [[k.co[1] for k in byi[i].keyframe_points] for i in range(4)] if len(byi) == 4 else None
+
+
+def _swing(action, bone):
+    q = _quat_curves(action, bone)
+    return max(max(c) - min(c) for c in q[1:]) if q else 0.0
+
+
+check(f"the rig has the {len(_cloth.CHAIN_BONES)} cloth bones", all(b in arm.data.bones for b in _cloth.CHAIN_BONES), str(_cloth.CHAIN_BONES))
+check(f"bone budget: {len(arm.data.bones)} bones <= {spec['character']['max_bones']}", len(arm.data.bones) <= spec["character"]["max_bones"])
+sw = {nm: {b: _swing(bpy.data.actions[nm], b) for b in ("sash_a1", "sash_b1", "flag_1", "banner_2")} for nm in ("idle", "run", "attack_horizontal")}
+check("the clips are baked DRY (no baked wind): the engine adds the world's wind (cloth.BAKED_WIND is False)", _cloth.BAKED_WIND is False)
+check("run: the cloth still follows the body by inertia (tails and flag swing more than at idle, flag swing > 0.01)", sw["run"]["sash_a1"] > sw["idle"]["sash_a1"] + 0.02 and sw["run"]["flag_1"] > max(0.01, sw["idle"]["flag_1"]), str(sw["run"]) + " idle " + str(sw["idle"]))
+for nm in ("idle", "walk", "run", "run_drawn", "combat_idle"):
+    worst = 0.0
+    for b in ("sash_a1", "sash_a2", "sash_b1", "sash_b2", "flag_1", "flag_2", "flag_3", "banner_1", "banner_2"):
+        q = _quat_curves(bpy.data.actions[nm], b)
+        worst = max(worst, max(abs(c[0] - c[-1]) for c in q))
+    check(f"{nm}: cloth bones loop exactly (first and last key identical, worst {worst:.1e})", worst < 1e-6, f"{worst:.2e}")
+finite = True
+tip_max = {}
+for nm, act in bpy.data.actions.items():
+    dg = json.loads(act.get("gp_cloth", "{}"))
+    for ch, d in dg.items():
+        finite = finite and all(math.isfinite(v) for v in d.values()) and d["max_deg"] < 125.0 and d["tip_cm_max"] < 60.0
+        tip_max[ch] = max(tip_max.get(ch, 0.0), d["tip_cm_max"])
+check("no blow-up: every clip's chains stay finite, bone turn < 125 deg, tip travel < 60 cm", finite and len(tip_max) == 4, str(tip_max))
+# determinism: simulating the same poses again gives the same keys
+_sv = anim.Solver(arm)
+_c = clips.CLIPS["walk"]
+_n = int(round(_c["duration"] * 30))
+
+
+def _run_walk():
+    ps = [_sv.solve(_c["fn"](0.0 if f == _n else _c["duration"] * f / _n)) for f in range(_n + 1)]
+    _cloth.simulate(_sv.rig, ps, True, _c["duration"], _c.get("speed", 0.0), "walk")
+    return [tuple(round(x, 9) for x in ps[f].D["sash_b2"]) for f in range(_n + 1)] + [tuple(round(x, 9) for x in ps[f].D["flag_3"]) for f in range(_n + 1)]
+
+
+check("the cloth simulation is deterministic (two runs give identical keys)", _run_walk() == _run_walk())
+# pose math: a placed chain bone points where the simulation put it
+_ps = _sv.solve(_c["fn"](0.3))
+_dirs = [Vector((0.2, -0.5, -0.84)).normalized(), Vector((-0.1, -0.3, -0.95)).normalized()]
+_ch = next(c for c in _cloth.chains() if c.name == "sash_a")
+_qs = _cloth.place_chain(_sv.rig, _ps, _ch, _dirs)
+for b, q in zip(_ch.bones, _qs):
+    _ps.D[b] = q
+_ps._M = None
+err = max(math.degrees(_ps.axis(b).angle(d)) for b, d in zip(_ch.bones, _dirs))
+check(f"place_chain: chain bones point along the simulated directions (error {err:.3f} deg)", err < 0.05, str(err))
+# clearance of the tails over every clip: run the measuring tool (it builds its own model: the tails must be a separate object to be measured)
+import subprocess
+_chk = subprocess.run([bpy.app.binary_path, "-b", "--factory-startup", "-P", os.path.join(ROOT, "generators", "samurai_cloth_check.py"), "--", "--clips", "idle,walk,run,attack_horizontal,attack_overhead,attack_thrust,attack_diagonal,hit,death",
+                       "--step", "1", "--assert-mm", "6", "--assert-pole-mm", "10"], capture_output=True, text=True, timeout=1200)
+_gate = [l for l in _chk.stdout.split("\n") if l.startswith("CLOTHCHECK GATE")]
+check("tails stay out of the armour in idle / walk / run / attack / death (worst > -6 mm; the static tails reached -19.7 mm)", any("tails_worst" in l and l.endswith("PASS") for l in _gate), "; ".join(_gate) if _gate else _chk.stdout[-300:])
+check("the sashimono pole never goes deeper than 10 mm into the armour (axis sampled between rings; the raised arms touch it in attack_overhead)", any("pole_worst" in l and l.endswith("PASS") for l in _gate), "; ".join(_gate) if _gate else _chk.stdout[-300:])
+
+# ---- 3b5b. the runtime cloth descriptor (the engine adds the wind to these chains): written by the generator, matches the rig
+_cj_path = os.path.join(ROOT, "out", "samurai_tex", "samurai_cloth.json")
+check("the cloth descriptor exists (the spec declares it)", os.path.exists(_cj_path))
+_cj = json.load(open(_cj_path))
+check("descriptor: baked_wind is false, four chains (sash_a, sash_b, pole, flag) of kinds ribbon / ribbon / pole / flag", _cj["baked_wind"] is False and [(c["name"], c["kind"]) for c in _cj["chains"]] == [("sash_a", "ribbon"), ("sash_b", "ribbon"), ("pole", "pole"), ("flag", "flag")], str([(c["name"], c["kind"]) for c in _cj["chains"]]))
+_bad = []
+for _c in _cj["chains"]:
+    for _sg in _c["segments"]:
+        _b = arm.data.bones.get(_sg["bone"])
+        if _b is None:
+            _bad.append((_sg["bone"], "missing")); continue
+        _v = _b.tail_local - _b.head_local
+        _gl = Vector((_v.x, _v.z, -_v.y)).normalized()                      # Blender -> glTF unit frame
+        if (_gl - Vector(_sg["dir"])).length > 2e-3 or abs(_b.length - _sg["length"]) > 1e-3:
+            _bad.append((_sg["bone"], "dir/length"))
+    _p = arm.data.bones.get(_c["parent"])
+    if _p is None:
+        _bad.append((_c["parent"], "parent missing"))
+check(f"descriptor: every segment's bone exists and its rest direction (glTF frame) and length match the armature ({len(_bad)} mismatches)", not _bad, str(_bad))
+
+# ---- 3b6. faction emblems: the sheet ships with the asset, its designs are distinct, the banner region matches the geometry, and only the banner cloth lies in it
+from samurai import consts as _consts, emblems as _emb
+_epng = os.path.join(ROOT, "out", "samurai_tex", "samurai_emblems.png")
+_ejson = os.path.join(ROOT, "out", "samurai_tex", "samurai_emblems.json")
+check("the emblem sheet and its json exist (the spec declares them)", os.path.exists(_epng) and os.path.exists(_ejson))
+_meta = json.load(open(_ejson))
+_raw = open(_epng, "rb").read()
+import struct as _struct
+import zlib as _zlib
+_w, _h = _struct.unpack(">II", _raw[16:24])
+_idat = b""
+_pos = 8
+while _pos < len(_raw):
+    _ln = _struct.unpack(">I", _raw[_pos:_pos + 4])[0]
+    if _raw[_pos + 4:_pos + 8] == b"IDAT":
+        _idat += _raw[_pos + 8:_pos + 8 + _ln]
+    _pos += 12 + _ln
+_dec = _zlib.decompress(_idat)
+_rows = [_dec[r * (_w + 1) + 1:(r + 1) * (_w + 1)] for r in range(_h)]
+check(f"emblem sheet is {_meta['cols']}x{_meta['rows']} cells of {_meta['px']} px, 8-bit grey ({_w}x{_h})", (_w, _h) == (_meta["cols"] * _meta["px"], _meta["rows"] * _meta["px"]) and len(_meta["names"]) == 8)
+_cells = []
+for _i in range(8):
+    _c0, _r0 = (_i % _meta["cols"]) * _meta["px"], (_i // _meta["cols"]) * _meta["px"]
+    _cells.append([1 if _rows[_r0 + y][_c0 + x] > 127 else 0 for y in range(_meta["px"]) for x in range(_meta["px"])])
+_cov = [sum(c) / len(c) for c in _cells]
+check("every emblem has a sensible fill (8-45% of its cell)", all(0.08 <= c <= 0.45 for c in _cov), str([round(c, 2) for c in _cov]))
+_mind = min(sum(a != b for a, b in zip(_cells[i], _cells[j])) / len(_cells[i]) for i in range(8) for j in range(i + 1, 8))
+check(f"the eight emblems are distinct (smallest pairwise difference {_mind:.0%} of a cell)", _mind > 0.08, f"{_mind:.3f}")
+_rg = _meta["banner"]["blender"]
+check("the json's banner region is the geometry's (constants shared with banner.py)", abs(_rg["x0"] - _consts.X0) < 1e-6 and abs(_rg["w"] - _consts.CLOTH_W) < 1e-6 and abs(_rg["z_top"] - (_consts.TOP - 0.004)) < 1e-6)
+def _in_region(co):
+    return _rg["x0"] - 0.002 <= co.x <= _rg["x0"] + _rg["w"] + 0.002 and _rg["z_top"] - _rg["h"] - 0.002 <= co.z <= _rg["z_top"] + 0.002 and _rg["y_min"] <= co.y <= _rg["y_max"]
+_cloth_v = sum(1 for v in sash.data.vertices if _in_region(v.co))
+_other = sum(1 for nm in ("Samurai_LOD0", "Katana_Drawn", "Katana_Sheathed", "Katana_Saya") for v in bpy.data.objects[nm].data.vertices if _in_region(v.co))
+check(f"only the banner cloth lies in the emblem region ({_cloth_v} cloth vertices, {_other} others)", _cloth_v >= 40 and _other == 0, str((_cloth_v, _other)))
+for lod in ("Samurai_LOD1", "Samurai_LOD2"):
+    _lv = sum(1 for v in bpy.data.objects[lod].data.vertices if _in_region(v.co))
+    check(f"{lod} keeps the cloth corners inside the emblem region ({_lv} vertices)", _lv >= 4, str(_lv))
+
 # ---- 3c. draw starts exactly where the sheathed sword sits (pop-free weapon swap)
 from samurai import katana as _K
 P0 = clips.CLIPS["draw"]["fn"](clips.CLIPS["draw"]["events"]["swap_weapon"])
@@ -110,7 +270,7 @@ res = gp_cli.run(spec_path, preview=False, out_override=out)
 check("samurai_unit_01 passes the gate (0 errors)", res["passed"])
 glb = os.path.join(out, "samurai_unit_01", "samurai_unit_01.glb")
 info = gp_glb.inspect(glb) if os.path.exists(glb) else {}
-check("exported GLB has one skin with 53 joints", info.get("skins") == 1 and info.get("joints") == 53, str((info.get("skins"), info.get("joints"))))
+check("exported GLB has one skin with 62 joints", info.get("skins") == 1 and info.get("joints") == 62, str((info.get("skins"), info.get("joints"))))
 names = {a["name"] for a in info.get("animations", [])}
 check(f"all {len(spec['character']['clips'])} clips are in the GLB", names == set(spec["character"]["clips"]), str(sorted(names)))
 check("one material, all textures KTX2 only", len(info.get("materials", [])) == 1 and "KHR_texture_basisu" in info.get("extensionsRequired", []))

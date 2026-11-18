@@ -1,6 +1,6 @@
 """Skeleton for the samurai: one table drives the Blender armature, the skin weights and the pose solver.
 
-A-pose rest, metres, character faces -Y, LEFT = +X (bones .L at +X, .R mirrored). 53 bones, all deforming, so the
+A-pose rest, metres, character faces -Y, LEFT = +X (bones .L at +X, .R mirrored). 55 bones, all deforming, so the
 exported glTF skin is exactly this list. Rolls are aligned so a bone's local Z points forward; the pose code never
 depends on roll because it works in armature-aligned rotation deltas (see pose.py).
 """
@@ -9,7 +9,7 @@ import math
 import bpy
 from mathutils import Vector
 
-from . import katana as K
+from . import cloth as C, katana as K
 
 V = Vector
 S_ARM = math.radians(24.0)          # A-pose abduction of the arm from vertical (matches the reference turnaround)
@@ -108,6 +108,16 @@ def bone_table():
         add(f"skirt_front.{sd}", "hips", m(V((0.065, -0.150, 0.975))), m(V((0.070, -0.168, 0.74))))
         add(f"skirt_side.{sd}", "hips", m(V((0.175, -0.015, 0.975))), m(V((0.195, -0.015, 0.75))))
         add(f"skirt_back.{sd}", "hips", m(V((0.070, 0.150, 0.975))), m(V((0.075, 0.168, 0.74))))
+    # cloth chains (cloth.py simulates them per clip and bakes the result): obi tails on the hips, the sashimono pole on the chest, the flag along the cloth
+    for key in "ab":
+        j = C.sash_joints(key)
+        add(f"sash_{key}1", "hips", j[0], j[1])
+        add(f"sash_{key}2", f"sash_{key}1", j[1], j[2])
+    add("banner_1", "chest", C.POLE[0], C.POLE[1])
+    add("banner_2", "banner_1", C.POLE[1], C.POLE[2])
+    fj = C.flag_joints()
+    for i in range(3):
+        add(f"flag_{i + 1}", "banner_2" if i == 0 else f"flag_{i}", fj[i], fj[i + 1])
     add("weapon_hip", "hips", K.HIP_ORIGIN, K.HIP_ORIGIN + K.HIP_DIR * 0.30)
     go, gt = grip_origin()
     add("weapon_r", "hand.R", go, go + gt * 0.30)

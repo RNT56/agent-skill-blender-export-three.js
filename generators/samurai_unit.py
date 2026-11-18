@@ -25,10 +25,14 @@ def main():
     if baked:
         from samurai import bake, shaders
         m = build.build_model(arg("--stage", "all"), mat_fn=shaders.procedural)
-        objs = [m[k] for k in ("body", "Katana_Drawn", "Katana_Sheathed", "Katana_Saya")]
+        objs = [m[k] for k in ("body", "Katana_Drawn", "Katana_Sheathed", "Katana_Saya", "Sashimono")]
         tex_dir = os.path.join(ROOT, arg("--bake"))
         maps = bake.bake_atlas(objs, tex_dir, "samurai", px=int(arg("--px", 2048)), quality=float(arg("--quality", 1.0)), log=print)
         bake.assign_baked(objs, maps, "samurai")
+        from samurai import emblems
+        print("  emblem sheet:", emblems.write(tex_dir, "samurai"))
+        from samurai import cloth as _cloth
+        print("  cloth descriptor:", _cloth.write_runtime(tex_dir, "samurai"))        # what the engine needs to add the world's wind on top of the dry-baked cloth     # the faction crests the engine draws on the banner cloth (the atlas carries none)
     else:
         m = build.build_model(arg("--stage", "all"))
     arm = m["arm"]
@@ -42,14 +46,16 @@ def main():
             o.objects.unlink(m["arm"])
         game.objects.link(m["arm"])
         body_ob = m["body"]
-        for o in (body_ob, m["Katana_Drawn"], m["Katana_Sheathed"], m["Katana_Saya"]):
+        for o in (body_ob, m["Katana_Drawn"], m["Katana_Sheathed"], m["Katana_Saya"], m["Sashimono"]):
             for c in list(o.users_collection):
                 c.objects.unlink(o)
             game.objects.link(o)
         body_ob.name = body_ob.data.name = "Samurai_LOD0"
         lod_tris = [int(x) for x in arg("--lods", "7000,2200").split(",")]
+        # the scabbard is part of the body mesh from LOD1 on (one draw call fewer per unit at range); LOD2 also carries the sheathed hilt
+        extras_by_lod = {1: (m["Katana_Saya"], m["Sashimono"]), 2: (m["Katana_Saya"], m["Katana_Sheathed"], m["Sashimono"])}
         for k, t in enumerate(lod_tris, start=1):
-            finalize.decimate_copy(body_ob, f"Samurai_LOD{k}", t, arm, game)
+            finalize.decimate_copy(body_ob, f"Samurai_LOD{k}", t, arm, game, extras=extras_by_lod.get(k, ()))
         for o in game.objects:
             if o.type == "MESH":
                 n, bad, mx = finalize.weight_report(o)

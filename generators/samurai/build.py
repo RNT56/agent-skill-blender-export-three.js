@@ -1,12 +1,12 @@
-"""Assemble the rest model: parts -> skinned objects (body + three weapon meshes) bound to the armature."""
+"""Assemble the rest model: parts -> skinned objects (body + weapon meshes + banner) bound to the armature."""
 import bpy
 from mathutils import Vector
 
-from . import armour, body, katana as K, materials, rig, skin
+from . import armour, banner, body, katana as K, materials, rig, skin
 
 V = Vector
 
-GROUPS = (("katana_hand", "Katana_Drawn"), ("katana_hip", "Katana_Sheathed"), ("katana_saya", "Katana_Saya"), ("katana_sageo", "Katana_Saya"))
+GROUPS = (("banner_", "Sashimono"), ("katana_hand", "Katana_Drawn"), ("katana_hip", "Katana_Sheathed"), ("katana_saya", "Katana_Saya"), ("katana_sageo", "Katana_Saya"))
 
 
 def clear_scene():
@@ -17,7 +17,7 @@ def clear_scene():
     bpy.context.view_layer.update()
 
 
-def build_model(stage="all", mat_fn=None, coll_name="samurai_LOD0"):
+def build_model(stage="all", mat_fn=None, coll_name="samurai_LOD0", split_tails=False):
     """Returns dict(arm, body, drawn, sheathed, saya, parts). stage 'body' skips armour (fast look-dev)."""
     mat_fn = mat_fn or materials.placeholder
     clear_scene()
@@ -32,7 +32,7 @@ def build_model(stage="all", mat_fn=None, coll_name="samurai_LOD0"):
         parts += armour.all_armour(table)
     go, gt = rig.grip_origin()
     M_hand = K.placement(go, gt, V((0, 0, -1)))
-    weapons = K.hip_katana() + K.saya_parts() + K.hand_katana(M_hand)
+    weapons = K.hip_katana() + K.saya_parts() + K.hand_katana(M_hand) + banner.banner_parts()
 
     objs = []
     for p in parts + weapons:
@@ -44,6 +44,9 @@ def build_model(stage="all", mat_fn=None, coll_name="samurai_LOD0"):
     wmap = {}
     body_objs = []
     for ob in objs:
+        if split_tails and ob.name.startswith("cloth_sash_tail"):      # measurement builds keep the tails apart from the body
+            wmap.setdefault("Sash_Tails", []).append(ob)
+            continue
         for prefix, target in GROUPS:
             if ob.name.startswith(prefix):
                 wmap.setdefault(target, []).append(ob)
