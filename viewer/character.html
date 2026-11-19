@@ -94,7 +94,13 @@ function setClip(name, t) {
   const drawn = m && m.weapon === 'drawn';
   if (weapons.drawn) weapons.drawn.visible = drawn;
   if (weapons.sheathed) weapons.sheathed.visible = !drawn;
+  showArrow();
   for (const b of document.querySelectorAll('#clips button')) b.classList.toggle('on', b.textContent === name);
+}
+function showArrow() {
+  if (!weapons.arrow) return;
+  const m = meta[state.clip] || {}, ev = m.events || {}, a = actions[state.clip], t = a ? a.time : 0;
+  weapons.arrow.visible = ev.arrow !== undefined ? (t >= ev.arrow && t < ev.release) : m.weapon === 'arrow';
 }
 window.setClip = setClip; window.setLod = setLod;
 
@@ -113,10 +119,11 @@ root.traverse(o => {
     tris[o.name] = Math.round(idx);
     const m = o.material;
     for (const k of ['map', 'normalMap', 'metalnessMap', 'aoMap']) if (m[k]) texInfo.push({ mesh: o.name, k, compressed: !!m[k].isCompressedTexture, w: m[k].image && m[k].image.width });
-    const mm = /^Samurai_LOD(\d)/.exec(o.name);
+    const mm = /_LOD(\d)$/.exec(o.name);                  // any character asset: <Unit>_LOD<n>
     if (mm) lods[+mm[1]] = o;
     if (o.name === 'Katana_Drawn') weapons.drawn = o;
     if (o.name === 'Katana_Sheathed') weapons.sheathed = o;
+    if (o.name === 'Arrow_Nocked') weapons.arrow = o;      // an archer's nocked arrow: shown between a clip's `arrow` and `release` events, or while its `weapon` is 'arrow'
   }
 });
 // team colour + faction emblem: ?team=0|1 (default 0) and optionally ?emblem=<cell>; the asset's own material is replaced by the team copy (the contract in team_emblem.js)
@@ -142,6 +149,7 @@ let simT = 0;
 function stepMixer(dt) {
   if (clothWind) clothWind.restore();                    // chain bones the clip does not animate must not keep last frame's wind rotation
   mixer.update(dt);
+  showArrow();
   if (!clothWind) return;
   simT += dt;
   const a = WIND.deg * Math.PI / 180, dx = Math.cos(a), dz = Math.sin(a), sp = (meta[state.clip] && meta[state.clip].speed_mps) || 0;
@@ -174,7 +182,7 @@ report = { tris, skinnedMeshes: skinned, bones: gltf.parser.json.skins ? gltf.pa
   textures: texInfo, mapIsCompressed: texInfo.every(t => t.compressed), errors, sweep, cloth: clothWind ? clothWind.chains.map(c => c.desc.name) : [] };
 window.report = report;
 state.loaded = true;
-document.getElementById('stats').textContent = `LOD0 ${tris.Samurai_LOD0 || '?'} tris · LOD1 ${tris.Samurai_LOD1 || '?'} · LOD2 ${tris.Samurai_LOD2 || '?'}\n` +
+document.getElementById('stats').textContent = [0, 1, 2].map(n => `LOD${n} ${lods[n] ? tris[lods[n].name] : '?'}`).join(' · ') + ' tris\n' +
   `${report.bones} bones · ${Object.keys(actions).length} clips · KTX2 ${report.mapIsCompressed}\nerrors: ${errors.length}`;
 
 const clock = new THREE.Clock();

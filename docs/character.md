@@ -98,5 +98,18 @@ The only face that shows is the band between the visor and the mask (z 1.59-1.70
 Clip choice is a pure state machine (`src/view/samurai_logic.js`): the sim has no wind-up, so the swing clip starts at `impact - cd` and its impact frame lands exactly when the sim damages; a unit running at a target inside 14 m draws on the way;
 locomotion playback = measured speed / `speed_mps`; death is fitted into the sim's corpse time; far units get LOD2, no weapon nodes, no shadow, a lower animation rate. See that repo's `tests/view/samurai_logic.test.mjs`.
 
+## A second character: the light archer (`generators/archer_unit.py`, kit in `generators/archer/`)
+```bash
+blender -b --factory-startup -P generators/archer_unit.py -- --bake out/archer_tex --px 2048 --quality 1.0 --finalize 1 --save fixtures/archer_unit.blend
+bin/gp build specs/archer_unit_01.json && blender -b fixtures/archer_unit.blend -P tests/test_archer_golden.py      # gate, then 30 checks
+bin/gp view   # http://localhost:8765/viewer/character.html?asset=archer_unit_01&clip=aim
+```
+Same recipe, gate and contract; it imports the samurai's `kit`, `pose`, `bake`, `finalize`, cloth solver and shared body parts and changes none of them. What is new:
+- **Nodes**: `Archer_LOD0..2`, `Yumi` (the bow), `Arrow_Nocked`, `Sashimono`. The bow and the banner are in the body mesh from LOD1 on (joined AFTER decimation: a thin bow does not survive it; LOD2 gets its own low-poly bow).
+- **The bow rig**: `weapon_l` (child of `hand.L`; the bow is modelled in the grip), `bow_u1/u2`, `bow_l1/l2` (the limbs flex), `bow_nock` (translates: the string's two strands end on it), `arrow`. `anim.BowModel` solves the limb angle that keeps the string's length for a given pull.
+- **Clips** (13): `idle walk run ready stand_down combat_idle shoot aim crouch_idle sneak crouch_shoot hit death`. `clips.json`: `weapon` is `none` or `arrow` (the nocked-arrow node is visible for the whole clip); shot clips carry `events.arrow` (show the node) and `events.release` (hide it: the engine's projectile flies).
+- **Cloth**: two hachimaki tails behind the head (`kind: ribbon`, `body_z: 1`: the engine clamps a push toward +z instead of -z), the pole and the flag.
+- **Live session**: `archer.build.build_model(live=True)` builds in its own scene (`Archer`) and clears only that scene. Bakes stay headless.
+
 ## Limits (not hidden)
 Procedural geometry and textures are not sculpted or scanned fidelity: plate edges are chamfered slabs, hands and face are simple, the menpo is a stylised mask. The free cloth (tails, flag, pole) is simulated offline per clip and baked; the garments are skinned with baked folds and the plates are rigid with analytic follow-through (see Cloth). Animation is authored by code, not motion capture: poses are plausible and foot-planted, not an animator's polish. Cloth folds are a baked normal-map detail (the robe does not simulate), the kabuto rivets and the mask wrinkles are shader detail, not geometry. No facial animation, no hit-direction variants; eight crest designs (more cells = a bigger sheet, no new asset). Measured in one browser on one GPU (Apple, Metal); frame cost per unit is not profiled.

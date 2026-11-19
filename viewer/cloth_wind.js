@@ -65,7 +65,8 @@ export class ChainState {
       // a ribbon hangs along -y and tilts toward the air's direction; the tails rest on the front of the body, so a push INTO it (-z) is clamped
       let px = 0, pz = 0;
       if (sp > 1e-4) { const a = Math.min(this.max, 0.62) * s * this.gain; px = air.x / sp * a; pz = air.z / sp * a; }
-      pz = Math.max(pz, -0.012);                                                  // 0.7 degrees: the baked tails already rest on the kusazuri, a tip 26 cm below its root moves 3 mm per 0.7 degrees
+      if ((this.desc.body_z ?? -1) > 0) pz = Math.min(pz, 0.012);                // `body_z: 1` in the descriptor: the body is in FRONT of the ribbon (tails that hang behind a head)
+      else pz = Math.max(pz, -0.012);                                             // 0.7 degrees: the baked tails already rest on the kusazuri, a tip 26 cm below its root moves 3 mm per 0.7 degrees
       total = Math.hypot(px, pz);
       axis = total > 1e-6 ? [-pz / total, 0, px / total] : [1, 0, 0];
       flutAmp = 0.12 * s * this.gain; flutHz = clamp(0.8 + 0.35 * sp, 0.8, 3.5); axis2 = [0, 1, 0]; twAmp = 0.5;     // the twist about its own length
