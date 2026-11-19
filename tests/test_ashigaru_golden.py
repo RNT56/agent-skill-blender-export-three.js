@@ -83,7 +83,9 @@ check("under the iron hat's neck curtain the head band's tails are left out of t
       and all(groups_used(n, 0.5) & TL for n in FAR if not n.endswith("Tetsu")), {n: sorted(groups_used(n, 0.5) & TL) for n in FAR})
 acts = {a.name: a for a in bpy.data.actions}
 want = spec["character"]["clips"]
-check("11 clips, every one in the spec, loops as the spec says", sorted(acts) == sorted(want) and all(bool(acts[k]["gp_loop"]) == want[k]["loop"] for k in want), sorted(acts))
+check(f"{len(want)} clips, every one in the spec, loops as the spec says", len(want) >= 12 and sorted(acts) == sorted(want) and all(bool(acts[k]["gp_loop"]) == want[k]["loop"] for k in want), sorted(acts))
+eq = acts["equip"]
+check("equip (taking up a piece of kit): 1.6 s, the hand closes on it at 0.85 s, and he ends as he stands at ease", int(eq.frame_range[1] - eq.frame_range[0]) == 48 and json.loads(eq["gp_events"]) == {"take": 0.85} and not eq["gp_loop"])
 check("thrusts: 29 frames, the point arrives at 0.45 s", all(int(acts[k].frame_range[1] - acts[k].frame_range[0]) == 29 and json.loads(acts[k]["gp_events"]) == {"impact": 0.45} for k in ("thrust_high", "thrust_low")))
 check("the grip never opens: the spear is never pulled in, the leading hand never slips down the shaft (0.0 mm in every clip)", all(a["gp_spear_shift_mm"] < 0.5 and a["gp_hand_slip_mm"] < 0.5 for a in acts.values()),
       {k: (a["gp_spear_shift_mm"], a["gp_hand_slip_mm"]) for k, a in acts.items() if a["gp_spear_shift_mm"] > 0 or a["gp_hand_slip_mm"] > 0})
@@ -179,6 +181,98 @@ dead = [None]
 for f in frames("death"):
     dead[0] = (arm.pose.bones["hips"].head.z, arm.pose.bones["head"].head.z, posed("weapon_r2", R.sp(R.NAGAE_LEN)).z, posed("weapon_r", R.sp(0.0)).z)
 check("death ends on the ground: hips and head under 0.35 m, neither spear end below the ground", dead[0][0] < 0.35 and dead[0][1] < 0.35 and dead[0][2] > -0.01 and dead[0][3] > -0.01, [round(x, 3) for x in dead[0]])
+
+# ---------------------------------------------------------------------------------------------------------------- hidden in the grass: crouch_idle, sneak
+# The sim draws a crouched man 0.95 m tall. Measured on the EVALUATED (skinned) meshes over every frame: the bare-headed body's highest point (crown), every vertex of
+# both spears (the pennant included, as the cloth bake left it), the shaft's clearance from the body (the right hand that holds it excluded).
+import math  # noqa: E402
+
+import numpy as np  # noqa: E402
+
+OLD = {"idle": (240, 8.0), "walk": (30, 1.0), "run": (21, 0.7), "ready": (24, 0.8), "stand_down": (24, 0.8), "combat_idle": (120, 4.0), "run_ready": (21, 0.7),
+       "thrust_high": (29, 0.9667), "thrust_low": (29, 0.9667), "hit": (18, 0.6), "death": (38, 1.2667), "equip": (48, 1.6)}
+cj = json.load(open(os.path.join(ROOT, "out", base, "clips.json")))
+check("every clip but the two crouch clips (the eleven before them and equip) keeps its frames and duration (Actions and clips.json)", all(k in acts and int(acts[k].frame_range[1] - acts[k].frame_range[0]) == n
+      and cj[k]["frames"] == n and abs(cj[k]["duration"] - d) < 1e-4 for k, (n, d) in OLD.items()), {k: cj.get(k, {}).get("frames") for k in OLD})
+CR = {"crouch_idle": (150, 5.0, 0.0, 1.00, 1.10), "sneak": (33, 1.1, 1.2, 1.15, 1.10)}      # frames, seconds, speed_mps, crown limit, spear limit
+check("crouch_idle (5 s) and sneak (1.1 s at 1.2 m/s) exist, loop, and clips.json says so", all(k in acts and bool(acts[k]["gp_loop"]) and int(acts[k].frame_range[1] - acts[k].frame_range[0]) == n
+      and abs(acts[k]["gp_speed"] - v) < 1e-6 and cj[k]["loop"] is True and cj[k]["frames"] == n and abs(cj[k]["duration"] - d) < 1e-4 and abs(cj[k]["speed_mps"] - v) < 1e-6
+      for k, (n, d, v, _, _) in CR.items()), {k: (cj.get(k, {}).get("frames"), cj.get(k, {}).get("speed_mps")) for k in CR})
+body = bpy.data.objects["Ashigaru_LOD0"]
+_HG = {g.index for g in body.vertex_groups if g.name.endswith(".R") and g.name.split("_")[0].split(".")[0] in ("hand", "thumb", "index", "middle", "ring", "pinky")}
+_away = np.array([sum(g.weight for g in v.groups if g.group in _HG) < 0.2 for v in body.data.vertices])
+
+
+def evaluated(name):
+    o = bpy.data.objects[name]
+    e = o.evaluated_get(bpy.context.evaluated_depsgraph_get())
+    me = e.to_mesh()
+    a = np.empty(len(me.vertices) * 3, dtype=np.float64)
+    me.vertices.foreach_get("co", a)
+    e.to_mesh_clear()
+    M = np.array(o.matrix_world)
+    return a.reshape(-1, 3) @ M[:3, :3].T + M[:3, 3]
+
+
+def shaft_clearance(pts, bone, ln, radius=0.017):
+    a, b = np.array(posed(bone, R.sp(0.0))), np.array(posed(bone, R.sp(ln)))
+    d = b - a
+    L = np.linalg.norm(d)
+    d /= L
+    s = np.clip((pts - a) @ d, 0.0, L)
+    return float(np.min(np.linalg.norm(pts - a - s[:, None] * d, axis=1))) - radius
+
+
+hi = {}
+for name, (n, d, v, crown_lim, spear_lim) in CR.items():
+    crown, sp_hi, clr, slope, grip = 0.0, {"Yari": 0.0, "Yari_Long": 0.0}, 9.0, 0.0, 0.0
+    first = last = None
+    ank = {"L": [], "R": []}
+    for f in frames(name):
+        pb = {b.name: b.matrix.copy() for b in arm.pose.bones}
+        first, last = (pb if first is None else first), pb
+        P = evaluated("Ashigaru_LOD0")
+        crown = max(crown, float(P[:, 2].max()))
+        for k in sp_hi:
+            sp_hi[k] = max(sp_hi[k], float(evaluated(k)[:, 2].max()))
+        for bone, ln in SPEARS:
+            clr = min(clr, shaft_clearance(P[_away], bone, ln))
+        a, b = posed("weapon_r", R.sp(0.0)), posed("weapon_r", R.sp(R.YARI_LEN))
+        slope = max(slope, abs(math.degrees(math.asin((b - a).normalized().z))))
+        grip = max(grip, line_dist(posed("hand.R", GR), a, b))
+        for s in "LR":
+            ank[s].append(arm.pose.bones[f"foot.{s}"].head.copy())
+    hi[name] = dict(crown=round(crown, 3), **{k: round(z, 3) for k, z in sp_hi.items()})
+    check(f"{name}: the bare head's top stays under {crown_lim:.2f} m every frame (the sim's crouched man is 0.95 m)", crown <= crown_lim, f"max {crown:.3f} m")
+    check(f"{name}: no part of either spear (pennant included) above {spear_lim:.2f} m, every frame", max(sp_hi.values()) <= spear_lim, {k: f"{z:.3f} m" for k, z in sp_hi.items()})
+    check(f"{name}: the spear is held level (shaft within 5 deg of horizontal), the right hand's grip on its axis", slope < 5.0 and grip < 0.0015, f"slope {slope:.1f} deg, grip {grip * 1000:.2f} mm")
+    check(f"{name}: neither shaft passes through the body (clearance > 5 mm every frame; the hand that holds it excluded)", clr > 0.005, f"{clr * 1000:.1f} mm")
+    check(f"{name}: a loop (every bone of the first frame is the last)", max(max(abs(x - y) for rx, ry in zip(first[k], last[k]) for x, y in zip(rx, ry)) for k in first) < 1e-4)
+    if name == "crouch_idle":
+        mv = max((p - q[0]).length for q in ank.values() for p in q)
+        check("crouch_idle: both feet stay where they are (he breathes, he does not shuffle)", mv < 0.002, f"{mv * 1000:.2f} mm")
+    else:
+        worst, used = 0.0, 0
+        for s, pts in ank.items():
+            zmin = min(p.z for p in pts)
+            for i in range(len(pts) - 1):
+                if pts[i].z < zmin + 0.004 and pts[i + 1].z < zmin + 0.004 and pts[i + 1].y > pts[i].y:
+                    used += 1
+                    worst = max(worst, abs((pts[i + 1].y - pts[i].y) * 30.0 - v), abs(pts[i + 1].x - pts[i].x) * 30.0)
+        check("sneak: no foot slides: every planted frame of both feet moves back at 1.2 m/s (within 0.05 m/s), and not sideways", used >= 20 and worst < 0.05, f"worst {worst:.4f} m/s over {used} frames")
+for _ in frames("idle"):
+    break
+neg = float(evaluated("Ashigaru_LOD0")[:, 2].max())
+check("negative: the same measure finds a standing man (idle) far above the crouch limit", neg > 1.6, f"{neg:.3f} m")
+info = {}
+for name in CR:
+    top = {k: 0.0 for k in ("Helmet_Jingasa", "Helmet_Tetsu", "Sashimono", F.far_name("Okegawa", "Tetsu"), F.far_name("HaraAte", "Jingasa"))}
+    for _ in frames(name):
+        for k in top:
+            top[k] = max(top[k], float(evaluated(k)[:, 2].max()))
+    info[name] = {k: round(z, 3) for k, z in top.items()}
+print("info  heights (m), bare body and spears:", hi)
+print("info  heights (m) of optional pieces and far meshes in the crouch clips (not gated):", info)
 arm.animation_data.action = None
 
 # ---------------------------------------------------------------------------------------------------------------- shipped side files

@@ -144,7 +144,9 @@ one 62-bone skeleton (`ashigaru/gear.py` `nodes()`: `Armour_HaraAte`, `Armour_Ok
 - **Viewer**: `?show=Armour_Okegawa,Helmet_Tetsu,Side_Tanto,Sashimono` dresses a model that has optional nodes (default: the first armour, the first helmet, the
   side pieces); `__view.dress([...])` changes it without a reload; LOD2 shows the matching far mesh.
 - **QA sheet of one kit, no bake**: `ashigaru_unit.py -- --render out/_ash --kit okegawa,tetsu,long,tanto --views front,back,head,top,head_b`.
-- Golden tests: `tests/test_ashigaru_golden.py` (37 checks on `fixtures/ashigaru_unit.blend`), `tests/test_archer_golden.py` (31).
+- **`equip`** (ashigaru and archer, `clips.py`): 1.6 s, one-shot, event `take` at 0.85 s. Standing at ease he leans to a rack, the free hand closes on a
+  piece, he lifts it to himself. An engine that lets a unit fetch gear plays it at the store and changes the shown nodes at `take`.
+- Golden tests: `tests/test_ashigaru_golden.py` (on `fixtures/ashigaru_unit.blend`), `tests/test_archer_golden.py`.
 
 ## Build id, occlusion grain, viewer hooks (2026-11-19)
 - `manifest.json` carries `build`: the first 12 hex digits of the SHA-1 of the exported GLB(s). An engine should fetch the manifest uncached and append the id to every

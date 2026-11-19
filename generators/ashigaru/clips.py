@@ -258,8 +258,76 @@ def death(t):
     return P
 
 
+# ------------------------------------------------------------------------------------------------------------- hidden in the grass
+# The sim draws a crouched man 0.95 m tall: nothing may stand above the grass. The spear is held LOW and LEVEL in the right hand, trailing at his side with the point
+# forward (the long pike `pike_up` further up, as wherever it is levelled); the shaft never rises, the pennant hangs off it.
+KN_DZ = -0.550                                                       # down on the right knee, sitting back toward the heel
+KN_FL = foot(0.120, -0.300, -8.0)                                    # the left foot forward, the knee up
+KN_FR = foot(-0.110, 0.248, -6.0, pitch=142.0, z=0.098, kpole=(0.0, -0.45, -1.0))     # the right knee on the ground, the shin along it, the instep down
+KN_B = V((-0.300, -0.220, 0.320))                                    # the right hand on the shaft, beside the knee on the ground
+KN_D = V((0.030, -1.0, -0.010))                                      # level, the point forward
+LOW_GRIP = 1.05                                                      # near the balance point of the short spear
+LOW_NR = (0.70, 0.0, -0.70)                                          # the hand over the shaft, on its outer side (a trail carry)
+
+
+def crouch_pose(breath=0.0, sway=0.0):
+    sp = spear(KN_B + V((0.002 * sway, 0.0, 0.003 * breath)), KN_D, LOW_NR, poleR=(-0.50, 0.80, -0.10))
+    hl = dict(pos=V((0.150, -0.370, 0.470)) + V((0.0, 0.0, 0.003 * breath)), pole=V((0.7, 0.5, -0.2)))
+    P = pose((0.0, 0.100, KN_DZ + 0.004 * breath), (26.0, 0.0, -6.0), (40.0 + 1.5 * breath, 0.0, 2.0), (-22.0, 0.0, 4.0 * sway), KN_FL, KN_FR, sp, LOW_GRIP,
+             pike_up=PIKE_UP, handL=hl, curl=(0.55, 1.0))
+    P["handL"]["space"] = "world"
+    return P
+
+
+def crouch_idle(t):
+    ph = TAU * t / 5.0                                                       # a slow breath; now and then a slight sway
+    return crouch_pose(math.sin(ph * 2), math.sin(ph))
+
+
+# a creep of 110 steps a minute at the sim's 1.2 m/s for a crouched man (the archer's), lower: the hips 0.40 m down, the back bent well forward
+SNEAK_V = 1.20
+SNEAK_G = dict(T=1.10, ahead=0.340, behind=0.400, duty=gait.duty_for(SNEAK_V, 1.10, 0.340, 0.400), lift=0.060, bob=0.012, sink=0.400, rise=0.050, spacing=0.110)
+SN_B = V((-0.300, -0.120, 0.950))                                    # the right hand on the shaft at his side (moves with the hips)
+SN_D = V((0.030, -1.0, -0.010))
+
+
+def sneak(t):
+    feet, hips, ph2 = gait.cycle(t, **SNEAK_G)
+    fl, fr = feet["L"], feet["R"]
+    tw = math.sin(ph2 + 0.2)
+    B = SN_B + hips + V((0.0, 0.012 * tw, 0.006 * math.cos(2 * ph2)))
+    sp = spear(B, SN_D, LOW_NR, poleR=(-0.50, 0.80, -0.10))
+    hl = dict(pos=V((0.270, -0.120 - 0.05 * tw, 0.720)), pole=V((0.5, 0.6, -0.5)))
+    return pose(hips, (28.0, 0.0, 6.0 * tw), (42.0, -5.0 * tw, 2.0 * math.sin(ph2)), (-22.0, 3.0 * tw, 0.0),
+                foot(fl["pos"].x, fl["pos"].y, fl["yaw"], fl["pitch"], fl["toe"], fl["pos"].z), foot(fr["pos"].x, fr["pos"].y, fr["yaw"], fr["pitch"], fr["toe"], fr["pos"].z),
+                sp, LOW_GRIP, pike_up=PIKE_UP, handL=hl, curl=(0.45, 1.0))
+
+
+
+# ------------------------------------------------------------------------------------------------------------- taking up a piece of kit
+EQUIP_T, EQUIP_TAKE = 1.6, 0.85                 # an engine changes the piece he carries at EQUIP_TAKE: the moment the free hand closes on it
+
+
+def _equip_pose(reach, lift, look=0.0):
+    """Standing at ease with the spear grounded. reach 0..1: he leans to the rack and the free hand goes out to it; lift 0..1: he brings the piece up to himself."""
+    lean = reach * (1.0 - lift)
+    D = V((0.028, 0.042 + 0.030 * lean, 1.0)).normalized()
+    g = (EASE_GRIP - 0.030 * lean) / D.z
+    sp = spear(BUTT + D * g, D, EASE_NR, poleR=(-0.30, 0.95, -0.35))
+    p = V(HANG_L["pos"]).lerp(V((0.205, -0.450, 0.960)), reach).lerp(V((0.130, -0.215, 1.330)), lift)
+    hl = dict(pos=p, pole=V((0.55, 0.45 - 0.55 * lift, -0.7 + 0.25 * lift)))
+    return pose((0.0, -0.040 * lean, -0.014 - 0.045 * lean), (0, 0, -7.0 * lean), (1.2 + 15.0 * lean, 0.0, -6.0 * lean), (5.0 * lean - 9.0 * lift, 0.0, look - 10.0 * lean),
+                foot(*IDLE_FL), foot(*IDLE_FR), sp, g, handL=hl, curl=(0.25 + 0.65 * max(lift, reach * reach), 1.0))
+
+
+def equip(t):
+    """At a rack: he reaches out with the free hand, takes the piece (EQUIP_TAKE), lifts it to himself and stands at ease again."""
+    keys = [(0.0, _equip_pose(0.0, 0.0)), (0.42, _equip_pose(0.80, 0.0)), (EQUIP_TAKE, _equip_pose(1.0, 0.0)), (1.22, _equip_pose(1.0, 1.0)), (EQUIP_T, _equip_pose(0.0, 0.0))]
+    return _keyed(keys, min(t, EQUIP_T))
+
 
 CLIPS = {
+    "equip": dict(fn=equip, duration=EQUIP_T, loop=False, weapon="none", events={"take": EQUIP_TAKE}),
     "idle": dict(fn=idle, duration=8.0, loop=True, weapon="none"),
     "walk": dict(fn=walk, duration=WALK_G["T"], loop=True, weapon="none", speed=WALK_V),
     "run": dict(fn=run, duration=RUN_G["T"], loop=True, weapon="none", speed=RUN_V),
@@ -271,4 +339,6 @@ CLIPS = {
     "thrust_low": dict(fn=thrust_low, duration=THRUST_T, loop=False, weapon="none", events={"impact": IMPACT_T}),
     "hit": dict(fn=hit, duration=0.6, loop=False, weapon="none"),
     "death": dict(fn=death, duration=DEATH_T, loop=False, weapon="none"),
+    "crouch_idle": dict(fn=crouch_idle, duration=5.0, loop=True, weapon="none"),
+    "sneak": dict(fn=sneak, duration=SNEAK_G["T"], loop=True, weapon="none", speed=SNEAK_V),
 }

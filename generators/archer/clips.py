@@ -322,7 +322,30 @@ def crouch_shoot(t):
 
 
 
+# ------------------------------------------------------------------------------------------------------------- taking up a piece of kit
+EQUIP_T, EQUIP_TAKE = 1.6, 0.85                 # an engine changes the piece he carries at EQUIP_TAKE: the moment the free hand closes on it
+
+
+def _equip_pose(reach, lift, look=0.0):
+    """Standing at ease, the bow upright in the left hand. reach 0..1: he leans to the rack and the right hand goes out; lift 0..1: he brings the piece up to himself."""
+    lean = reach * (1.0 - lift)
+    b = bowd(V(BOW_EASE["G"]) + V((0.0, -0.020 * lean, -0.030 * lean)), V(BOW_EASE["U"]), V(BOW_EASE["W"]), BOW_EASE["pole"])
+    pinch = V(HAND_HANG["pinch"]).lerp(V((-0.205, -0.455, 0.960)), reach).lerp(V((-0.130, -0.225, 1.340)), lift)
+    d = V(HAND_HANG["dir"]).lerp(V((0.10, -0.95, -0.25)), reach).lerp(V((0.45, -0.35, 0.80)), lift).normalized()
+    pm = V(HAND_HANG["palm"]).lerp(V((0.95, 0.10, -0.25)), reach).lerp(V((0.75, 0.55, -0.30)), lift).normalized()
+    h = handd(pinch, d, pm, V(HAND_HANG["pole"]) + V((0.0, -0.45 * lift, 0.25 * lift)))
+    return pose((0.0, -0.040 * lean, -0.014 - 0.045 * lean), (0, 0, 7.0 * lean), (1.2 + 15.0 * lean, 0.0, 6.0 * lean), (5.0 * lean - 9.0 * lift, 0.0, look + 10.0 * lean),
+                foot(*IDLE_FL), foot(*IDLE_FR), b, h, curl=(0.85, 0.22 + 0.60 * max(lift, reach * reach)))
+
+
+def equip(t):
+    """At a rack: he reaches out with the string hand, takes the piece (EQUIP_TAKE), lifts it to himself and stands at ease again."""
+    keys = [(0.0, _equip_pose(0.0, 0.0)), (0.42, _equip_pose(0.80, 0.0)), (EQUIP_TAKE, _equip_pose(1.0, 0.0)), (1.22, _equip_pose(1.0, 1.0)), (EQUIP_T, _equip_pose(0.0, 0.0))]
+    return finish(_keyed(keys, min(t, EQUIP_T)))
+
+
 CLIPS = {
+    "equip": dict(fn=equip, duration=EQUIP_T, loop=False, weapon="none", events={"take": EQUIP_TAKE}),
     "idle": dict(fn=idle, duration=8.0, loop=True, weapon="none"),
     "walk": dict(fn=walk, duration=WALK_G["T"], loop=True, weapon="none", speed=WALK_V),
     "run": dict(fn=run, duration=RUN_G["T"], loop=True, weapon="none", speed=RUN_V),

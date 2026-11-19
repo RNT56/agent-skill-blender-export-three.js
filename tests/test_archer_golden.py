@@ -57,7 +57,8 @@ for n in ("Archer_LOD1", "Archer_LOD2"):
           [b for b in ("bow_u2", "bow_l2", "bow_nock", "flag_1", "flag_2", "flag_3") if gi.get(b) not in used])
 acts = {a.name: a for a in bpy.data.actions}
 want = spec["character"]["clips"]
-check("13 clips, every one in the spec", sorted(acts) == sorted(want), sorted(acts))
+check(f"{len(want)} clips, every one in the spec", len(want) == 14 and sorted(acts) == sorted(want), sorted(acts))
+check("equip (taking up a piece of kit): 1.6 s, the hand closes on it at 0.85 s", int(acts["equip"].frame_range[1] - acts["equip"].frame_range[0]) == 48 and json.loads(acts["equip"]["gp_events"]) == {"take": 0.85})
 check("shot clips: 35 frames, the arrow appears at 0.133 s, leaves at 0.80 s", all(int(acts[k].frame_range[1] - acts[k].frame_range[0]) == 35 and json.loads(acts[k]["gp_events"]) == {"arrow": 0.1333, "release": 0.8} for k in ("shoot", "crouch_shoot")))
 check("the grip never opens: the bow is pulled in by < 20 mm in every clip, the string hand is ON the nock (0.0 mm) whenever it should be", all(a["gp_bow_shift_mm"] < 20.0 and a["gp_string_gap_mm"] < 0.5 for a in acts.values()),
       {k: (a["gp_bow_shift_mm"], a["gp_string_gap_mm"]) for k, a in acts.items() if a["gp_bow_shift_mm"] > 0})

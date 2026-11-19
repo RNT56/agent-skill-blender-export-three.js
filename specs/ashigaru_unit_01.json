@@ -56,6 +56,15 @@
       },
       "death": {
         "loop": false
+      },
+      "equip": {
+        "loop": false
+      },
+      "crouch_idle": {
+        "loop": true
+      },
+      "sneak": {
+        "loop": true
       }
     },
     "team_mask": "out/ashigaru_tex/ashigaru_team.png",
@@ -83,7 +92,10 @@
       "thrust_high",
       "thrust_low",
       "hit",
-      "death"
+      "death",
+      "equip",
+      "crouch_idle",
+      "sneak"
     ]
   },
   "export": {
