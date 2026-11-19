@@ -227,12 +227,7 @@ def span(K, tier, broken=False):
             K.rubble(["Wood", "WoodL"], 6, L, -1.5, -0.3, 0.26)
         K.box("Wood", L, 0.1, 0.1, 0, T["height"] + 0.3 - (0.42 if broken else 0), -0.05) if lod < 2 and not broken else None
         K.walkway(T, L, lost={2} if broken else ())
-        if lod < 2:
-            zr = T["off"] + T["walk"] / 2 - 0.1
-            K.box("Wood", L, 0.07, 0.07, 0, T["deck"] + 0.95, zr)
-            K.box("Wood", 0.08, 0.95, 0.08, -L / 2 + 0.35, T["deck"], zr)
-            if lod == 0:
-                K.box("Wood", L, 0.05, 0.05, 0, T["deck"] + 0.5, zr)
+        # (the rail along the walkway is made by the game, piece by piece: it has to leave a gap wherever a stair lands)
     elif k == 2:
         base, top, zc = 1.15, T["height"] - 0.7, -0.22
         K.prism("Stone", L, 0, [(-1.0, -0.6), (0.55, -0.6), (0.4, base), (-0.85, base)])
@@ -426,14 +421,14 @@ def tower(K, tier):
             if lod < 2:
                 for z in (-h + 0.15, h - 0.15):
                     K.rod("Wood", (-h - 0.2, y - 0.2, z), (h + 0.2, y - 0.2, z), 0.09, 6)
-        for y in (deck, deck + rise - 0.1):
+        for lvl, y in enumerate((deck, deck + rise - 0.1)):
             for x, z, w, dd in ((0, -h, s, 0.07), (-h, 0, 0.07, s), (h, 0, 0.07, s)):
-                n = 8 if lod == 0 else 1
+                n = 8 if lod == 0 else 2
                 for i in range(n):
                     if w > dd:
-                        K.box("Wood", w / n - 0.012 * (n > 1), 1.05 + (r.uniform(-0.05, 0.05) if n > 1 else 0), dd, -h + s * (i + 0.5) / n, y, z)
-                    else:
-                        K.box("Wood", w, 1.05 + (r.uniform(-0.05, 0.05) if n > 1 else 0), dd / n - 0.012 * (n > 1), x, y, -h + s * (i + 0.5) / n)
+                        K.box("Wood", w / n - 0.012 * (n > 1), 1.05 + (r.uniform(-0.05, 0.05) if lod == 0 else 0), dd, -h + s * (i + 0.5) / n, y, z)
+                    elif lvl == 1 or -h + s * (i + 0.5) / n < 0.1:           # at the level of the wall's walkway the inner half of each side stays open: the way through
+                        K.box("Wood", w, 1.05 + (r.uniform(-0.05, 0.05) if lod == 0 else 0), dd / n - 0.012 * (n > 1), x, y, -h + s * (i + 0.5) / n)
         if lod < 2:
             for a, b in (((-h, 0.3, -h), (h, deck - 0.3, -h)), ((h, 0.3, -h), (-h, deck - 0.3, -h)), ((-h, 0.3, -h), (-h, deck - 0.3, h)), ((h, 0.3, h), (h, deck - 0.3, -h))):
                 K.beam("Wood", (a[0] * 0.92, a[1], a[2] * 0.92), (b[0] * 0.92, b[1], b[2] * 0.92), 0.09, 0.09)       # cross braces

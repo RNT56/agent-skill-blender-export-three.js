@@ -5,15 +5,15 @@
   "source_blend": "fixtures/vale_buildings.blend",
   "look": "golden_hour",
   "budgets": {
-    "max_tris": 110000,
-    "max_materials": 6,
+    "max_tris": 190000,
+    "max_materials": 9,
     "max_texture_px": 1024,
-    "max_file_mb": 20
+    "max_file_mb": 26
   },
   "lod_budgets": {
-    "LOD0": 82000,
-    "LOD1": 27000,
-    "LOD2": 3000
+    "LOD0": 132000,
+    "LOD1": 52000,
+    "LOD2": 5500
   },
   "rules": {
     "tiling_uvs": true,
@@ -33,7 +33,10 @@
       "vb_wood",
       "vb_woodl",
       "vb_tile",
-      "vb_thatch"
+      "vb_thatch",
+      "vb_shingle",
+      "vb_earth",
+      "vb_paper"
     ]
   },
   "export": {

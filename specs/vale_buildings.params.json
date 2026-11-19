@@ -119,6 +119,16 @@
   "raised": 0,
   "chimney": false
  },
+ "charcoal_kiln": {
+  "w": 5,
+  "d": 5,
+  "h": 3,
+  "shape": "kiln",
+  "roof": "thatch",
+  "plaster": false,
+  "raised": 0,
+  "chimney": false
+ },
  "tatara": {
   "w": 8,
   "d": 7,
@@ -179,12 +189,52 @@
   "raised": 0,
   "chimney": false
  },
+ "market": {
+  "w": 9,
+  "d": 7,
+  "h": 4,
+  "shape": "stalls",
+  "roof": "plank",
+  "plaster": false,
+  "raised": 0,
+  "chimney": false
+ },
+ "well": {
+  "w": 2.6,
+  "d": 2.6,
+  "h": 2.6,
+  "shape": "well",
+  "roof": "thatch",
+  "plaster": false,
+  "raised": 0,
+  "chimney": false
+ },
+ "shrine": {
+  "w": 6,
+  "d": 8,
+  "h": 6,
+  "shape": "shrine",
+  "roof": "tile",
+  "plaster": false,
+  "raised": 0,
+  "chimney": false
+ },
  "dojo": {
   "w": 11,
   "d": 8,
   "h": 6,
   "shape": "hall",
   "roof": "tile",
+  "plaster": false,
+  "raised": 0,
+  "chimney": false
+ },
+ "watchtower": {
+  "w": 4,
+  "d": 4,
+  "h": 10,
+  "shape": "tower",
+  "roof": "plank",
   "plaster": false,
   "raised": 0,
   "chimney": false
