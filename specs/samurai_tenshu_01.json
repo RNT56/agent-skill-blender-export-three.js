@@ -1,0 +1,13 @@
+{
+  "name": "samurai_tenshu_01",
+  "type": "building",
+  "recipe": "building",
+  "source_blend": "fixtures/samurai_tenshu.blend",
+  "look": "golden_hour",
+  "budgets": { "max_tris": 111000, "max_materials": 5, "max_texture_px": 1024, "max_file_mb": 20 },
+  "lod_budgets": { "LOD0": 80000, "LOD1": 24000, "LOD2": 7000 },
+  "rules": { "tiling_uvs": true, "origin_tolerance": 1.0 },
+  "recipe_cfg": { "collections": ["tenshu_LOD0", "tenshu_LOD1", "tenshu_LOD2"] },
+  "glb_expect": { "occlusion": ["tenshu_stone", "tenshu_plaster", "tenshu_wood", "tenshu_tile"] },
+  "export": { "out_dir": "out", "compress": true, "png_fallback": false }
+}

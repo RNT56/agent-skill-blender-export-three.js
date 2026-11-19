@@ -558,6 +558,8 @@ def hall(K, bid):
 
 
 def shed(K, bid):
+    if bid == "ya_bokujo":                                                                            # the archery ground is a shed of its own kind
+        return archery(K, bid)
     P, lod = K.P, K.lod
     bw, bd, H = P["w"] - 2 * M, P["d"] - 2 * M, P["h"]
     K.bw, K.bd = bw, bd
@@ -592,6 +594,190 @@ def shed(K, bid):
         K.box("WoodL", bw * 0.6, 0.05, 0.28, -bw * 0.1, y0 + hw * 0.64, -bd / 2 + 0.26)
     board_roof(K, bw + 1.0, bd / 2 + 0.55, y0 + hw, H * 0.3, wall_hw=bd / 2 - 0.1)
     shed_things(K, bid, bw, bd, y0)
+
+
+def mato(K, x, y, z, lean, r=0.36):
+    """a straw target in a wooden hoop, leaning back by `lean` against the bank: white, black, white rings round a black eye (kasumi-mato). The white is
+    plaster, not paper: the game lights every vb_paper surface after dark, and a target is not a lantern"""
+    lod = K.lod
+    ax = Vector((-math.cos(lean), 0.0, math.sin(lean)))                                              # its face, toward the shooting line (Blender frame)
+    c = G(x, y, z)
+    segs = (16, 10, 6)[lod]
+    K.m["Wood"].cylinder(c, ax, r, 0.1, segs)
+    rings = ((r * 0.92, "Plaster"), (r * 0.7, "Tile"), (r * 0.48, "Plaster"), (r * 0.24, "Tile")) if lod < 2 else ((r * 0.92, "Plaster"),)
+    for k, (rr, kind) in enumerate(rings):
+        K.m[kind].cylinder(c + ax * (0.052 + 0.006 * k), ax, rr, 0.012, segs)
+
+
+def takegaki(K, x0, x1, z, h=1.75):
+    """a bamboo screen (tate-yotsume-gaki): log posts, three rails, close-set uprights of uneven height, all tied on the outside"""
+    lod, r = K.lod, K.r
+    L = x1 - x0
+    if lod == 2:
+        K.box("WoodL", L, h, 0.05, (x0 + x1) / 2, BASE, z)
+        return
+    n = max(1, round(L / 1.8))
+    for i in range(n + 1):
+        x = x0 + L * i / n
+        K.log("Wood", 0.07, 0.06, h + 0.25, x, BASE - 0.1, z, 6 if lod == 0 else 4)
+    for yy in (0.42, 0.98, 1.5):
+        for i in range(n):
+            K.rod("WoodL", (x0 + L * i / n - 0.05, BASE + yy, z - 0.06), (x0 + L * (i + 1) / n + 0.05, BASE + yy, z - 0.06), 0.024, 4)
+    m = int(L / (0.15 if lod == 0 else 0.45))
+    for i in range(m):
+        x = x0 + L * (i + 0.5) / m
+        K.rod("WoodL", (x, BASE - 0.15, z), (x, BASE + h - 0.1 + r.uniform(-0.06, 0.08), z), 0.021, 4)
+
+
+def archery(K, bid):
+    """yumiba: a Japanese archery ground on a long narrow plot. At the west end the shooting hall (shajo): a boarded floor on posts and stones under a plank
+    gable, closed at the back and on one side, open toward the targets, a bow rack and an arrow stand on its back wall, a bench. A strip of sand (yamichi)
+    between low stone kerbs runs to the azuchi at the east end: a bank of earth under its own little plank roof, three targets (mato) leaning in it, spent
+    arrows in the earth. Bamboo along the back; a makiwara (the straw butt one practises the draw on) by the hall's steps."""
+    P, lod, r = K.P, K.lod, K.r
+    w, d = P["w"], P["d"]
+    hx0, hx1, hz0, hz1 = -w / 2 + M, -w / 2 + M + 3.3, -d / 2 + 0.5, d / 2 - 1.0                       # the hall's floor
+    hxm, hzm = (hx0 + hx1) / 2, (hz0 + hz1) / 2
+    FL, EY = BASE + 0.4, BASE + 2.35
+    seg = 7 if lod == 0 else 5 if lod == 1 else 4
+    # --- the hall
+    if lod < 2:
+        K.box("Wood", hx1 - hx0 - 0.6, FL - BASE + SINK - 0.06, hz1 - hz0 - 0.6, hxm, BASE - SINK, hzm)              # the dark under the floor
+    for x in (hx0 + 0.1, hxm, hx1 - 0.1):
+        for z in (hz0 + 0.1, hz1 - 0.1):
+            K.log("Wood", 0.11, 0.095, EY - BASE + 0.1, x, BASE - 0.1, z, seg)
+            if lod < 2:
+                rock(K, x, BASE - 0.12, z, r.uniform(0.24, 0.3), flat=0.65)
+    nb = 12 if lod == 0 else 1
+    for i in range(nb):                                                                               # the floor, boards running toward the targets
+        z0_ = hz0 + (hz1 - hz0) * i / nb
+        K.box("WoodL", hx1 - hx0, 0.06, (hz1 - hz0) / nb - (0.01 if nb > 1 else 0), hxm, FL - 0.06, z0_ + (hz1 - hz0) / nb / 2)
+    if lod < 2:
+        K.box("Wood", 0.14, 0.2, hz1 - hz0, hx1 - 0.07, FL - 0.26, hzm)                                # the edge beam at the shooting line
+        K.box("Wood", hx1 - hx0, 0.2, 0.12, hxm, FL - 0.26, hz1 - 0.06)
+        for z in (hzm,):
+            K.box("Wood", 0.12, FL - BASE - 0.06, 0.12, hx1 - 0.1, BASE, z)
+            rock(K, hx1 - 0.1, BASE - 0.1, z, 0.2, flat=0.65)
+        for x in (hx0 + 0.1, hxm, hx1 - 0.1):
+            K.box("Wood", 0.12, 0.14, hz1 - hz0 + 0.24, x, EY - 0.16, hzm)                              # tie beams
+        for z in (hz0 + 0.1, hz1 - 0.1):
+            K.box("Wood", hx1 - hx0 + 0.3, 0.16, 0.14, hxm, EY - 0.16, z)                               # plates
+    # boards: the whole back (west) wall, the north side at the back and a dado at the front; the south side is open, with steps
+    for (x0_, x1_, z0_, z1_, y1_, along) in ((hx0 - 0.03, hx0 + 0.03, hz0, hz1, EY - 0.12, "z"), (hx0, hxm, hz0 - 0.03, hz0 + 0.03, EY - 0.12, "x"),
+                                            (hxm, hx1, hz0 - 0.03, hz0 + 0.03, FL + 0.85, "x")):
+        L = (z1_ - z0_) if along == "z" else (x1_ - x0_)
+        n = max(1, int(L / 0.26)) if lod == 0 else 1
+        for i in range(n):
+            a = L * i / n + (0.007 if n > 1 else 0)
+            b = L * (i + 1) / n - (0.007 if n > 1 else 0)
+            top = y1_ + (r.uniform(-0.03, 0.02) if n > 1 else 0)
+            if along == "z":
+                K.box("Wood", x1_ - x0_, top - BASE, b - a, (x0_ + x1_) / 2, BASE, z0_ + (a + b) / 2)
+            else:
+                K.box("Wood", b - a, top - BASE, z1_ - z0_, x0_ + (a + b) / 2, BASE, (z0_ + z1_) / 2)
+    if lod < 2:
+        K.box("Wood", hx1 - hxm, 0.08, 0.1, (hxm + hx1) / 2, FL + 0.85, hz0 + 0.02)                    # the dado's rail
+        for i in range(2):                                                                            # steps up from the south: two blocks
+            K.box("WoodL", 1.0, (FL - BASE) * (i + 1) / 3, 0.3, hxm - 0.3, BASE, hz1 + 0.47 - 0.28 * i)
+        rock(K, hxm - 0.3, BASE - 0.12, hz1 + 0.88, 0.42, flat=0.24)
+        # a bow rack on the back wall, three bows lying on its pegs; an arrow stand; a bench
+        for z in (-1.35, 0.85):
+            K.box("Wood", 0.07, 1.7, 0.08, hx0 + 0.1, FL, z)
+        if lod == 0:
+            for k, yy in enumerate((0.85, 1.2, 1.55)):
+                zs = [-1.45 + 2.4 * i / 8 for i in range(9)]
+                pts = [G(hx0 + 0.16 + 0.07 * math.sin(math.pi * (i / 8)) + 0.03 * math.sin(2 * math.pi * i / 8), FL + yy, z_) for i, z_ in enumerate(zs)]
+                K.m["WoodL" if k != 1 else "Wood"].tube(pts, [0.016 + 0.006 * math.sin(math.pi * i / 8) for i in range(9)], sides=4)
+                K.rod("Thatch", (hx0 + 0.15, FL + yy, zs[0]), (hx0 + 0.15, FL + yy, zs[-1]), 0.004, 3)
+                for z in (-1.35, 0.85):
+                    K.box("Wood", 0.12, 0.03, 0.03, hx0 + 0.17, FL + yy - 0.03, z)
+        K.box("Wood", 0.28, 0.5, 0.2, hx0 + 0.3, FL, hz1 - 0.45)                                        # ya-tate: the arrow stand
+        if lod == 0:
+            for i in range(6):
+                zz = hz1 - 0.53 + 0.035 * i
+                K.rod("WoodL", (hx0 + 0.3 + 0.02 * (i % 2), FL + 0.3, zz), (hx0 + 0.3 + 0.05 * (i % 3 - 1), FL + 1.25, zz + 0.02), 0.009, 3)
+        bench(K, hxm - 0.2, hz0 + 0.32, 1.5, FL)
+        barrel(K, hx1 + 0.45, hz1 - 0.2, BASE, 0.27, 0.62, lid=False)
+        # the makiwara by the steps: a drum of straw on a stand
+        mx, mz = hx1 + 0.6, hz1 + 0.45
+        for s in (-1, 1):
+            K.beam("Wood", (mx + s * 0.22, BASE, mz), (mx + s * 0.08, BASE + 0.92, mz), 0.06, 0.06)
+        K.m["Thatch"].cylinder(G(mx, BASE + 1.05, mz), (1, 0, 0), 0.24, 0.55, 10 if lod == 0 else 6)
+    board_roof(K, hx1 - hx0 + 1.0, (hz1 - hz0) / 2 + 0.48, EY, 0.95, x0=hxm + 0.2, z0=hzm, wall_hw=(hz1 - hz0) / 2 - 0.1)
+    # --- the sand strip between kerbs
+    sx0, sx1, sz0, sz1 = hx1 + 0.04, w / 2 - 2.45, -1.05, 1.0
+    K.box("Earth", sx1 - sx0, 0.09, sz1 - sz0, (sx0 + sx1) / 2, BASE - 0.06, (sz0 + sz1) / 2)
+    for z in (sz0 - 0.07, sz1 + 0.07):
+        if lod == 0:
+            x = sx0
+            while x < sx1 - 0.2:
+                ln = min(r.uniform(0.5, 0.85), sx1 - x)
+                K.box("Stone", ln - 0.04, 0.16, 0.16 + r.uniform(-0.02, 0.02), x + ln / 2, BASE - 0.08, z + r.uniform(-0.02, 0.02), rz=r.uniform(-0.03, 0.03))
+                x += ln
+        elif lod == 1:
+            K.box("Stone", sx1 - sx0, 0.16, 0.16, (sx0 + sx1) / 2, BASE - 0.08, z)
+    # --- the azuchi: a bank of earth, rounded at its ends, its face toward the hall
+    prof = [(sx1 - 0.05, -0.15), (sx1 + 0.12, 0.05), (sx1 + 0.42, 0.42), (sx1 + 0.75, 0.88), (sx1 + 1.1, 1.3), (sx1 + 1.45, 1.55), (sx1 + 1.8, 1.64),
+            (sx1 + 2.1, 1.45), (sx1 + 2.28, 0.95), (sx1 + 2.38, -0.15)]
+    if lod == 2:
+        prof = [prof[i] for i in (0, 2, 4, 6, 8, 9)]
+    nz = (12, 7, 3)[lod]
+    az0, az1 = -d / 2 + 0.55, d / 2 - 0.65
+    mb = K.m["Earth"]
+    rows = []
+    for j in range(nz + 1):
+        z = az0 + (az1 - az0) * j / nz
+        e = min(z - az0, az1 - z)
+        t_ = min(max(e / 0.85, 0.0), 1.0)
+        f = t_ * t_ * (3 - 2 * t_) if lod < 2 else (1.0 if 0 < j < nz else 0.0)
+        wob = 0.05 * math.sin(z * 2.3 + 0.7) if lod == 0 else 0.0
+        rows.append([mb.bm.verts.new(mb.M @ G(x + wob, (y * f - 0.15 * (1 - f)) if y > 0 else y, z)) for x, y in prof])
+    for j in range(nz):
+        for i in range(len(prof) - 1):
+            try:
+                f_ = mb.bm.faces.new((rows[j][i], rows[j][i + 1], rows[j + 1][i + 1], rows[j + 1][i]))
+            except ValueError:
+                continue
+            f_.normal_update()
+            if f_.normal.z < 0:
+                f_.normal_flip()
+            f_.smooth = True
+
+    def face_x(y):                                                                                    # where the bank's face is at height y
+        for (xa, ya), (xb, yb) in zip(prof[:-1], prof[1:]):
+            if ya <= y <= yb:
+                return xa + (xb - xa) * (y - ya) / (yb - ya)
+        return prof[0][0]
+    lean = math.radians(32)
+    for k, z in enumerate((-1.05, 0.0, 1.05)):
+        yc = BASE + 0.55
+        mato(K, face_x(yc) - 0.03, yc, z, lean)
+        if lod == 0:                                                                                  # spent arrows in the earth about it
+            for i in range(2):
+                y_ = BASE + r.uniform(0.25, 1.1)
+                z_ = z + r.uniform(-0.45, 0.45)
+                x_ = face_x(y_) + 0.02
+                K.rod("WoodL", (x_, y_, z_), (x_ - 0.6, y_ + r.uniform(0.02, 0.12), z_ + r.uniform(-0.05, 0.05)), 0.009, 3)
+    # its roof: boards on two beams, low in front, resting on the bank behind
+    rx0, rx1, ry0, ry1 = sx1 + 0.85, w / 2 - 0.08, BASE + 2.2, BASE + 2.55                         # (it keeps the rain off the top: the targets stay in the open)
+    rz0, rz1 = az0 - 0.25, az1 + 0.25
+    sl = math.atan2(ry1 - ry0, rx1 - rx0)
+    ln = math.hypot(rx1 - rx0, ry1 - ry0)
+    K.box("Wood", ln, 0.07, rz1 - rz0, (rx0 + rx1) / 2, (ry0 + ry1) / 2 - 0.035 + 0.03, (rz0 + rz1) / 2, ry=-sl)
+    for z in (az0 - 0.05, az1 + 0.05):
+        K.log("Wood", 0.085, 0.075, ry0 - BASE + 0.05, rx0 + 0.15, BASE - 0.1, z, seg)
+        K.log("Wood", 0.085, 0.075, ry1 - BASE + 0.05, rx1 - 0.18, BASE - 0.1, z, seg)
+        if lod < 2:
+            rock(K, rx0 + 0.15, BASE - 0.1, z, 0.2, flat=0.65)
+    if lod < 2:
+        K.box("Wood", 0.12, 0.13, rz1 - rz0 - 0.2, rx0 + 0.15, ry0 - 0.1, (rz0 + rz1) / 2)
+        K.box("Wood", 0.12, 0.13, rz1 - rz0 - 0.2, rx1 - 0.18, ry1 - 0.18, (rz0 + rz1) / 2)
+        if lod == 0:
+            for i in range(9):
+                z = rz0 + 0.15 + (rz1 - rz0 - 0.3) * i / 8
+                K.beam("Wood", (rx0 - 0.02, ry0 + 0.06, z), (rx1, ry1 + 0.06, z), 0.05, 0.035)
+    # --- a bamboo screen along the back of the strip and the bank (the kit has no green for leaves: the bamboo is in the fence)
+    takegaki(K, hx1 + 0.1, w / 2 - 0.15, -d / 2 + 0.17)
 
 
 # ------------------------------------------------------------------------------------------------------------------ the round ones

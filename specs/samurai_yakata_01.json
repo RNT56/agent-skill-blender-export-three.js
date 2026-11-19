@@ -1,0 +1,13 @@
+{
+  "name": "samurai_yakata_01",
+  "type": "building",
+  "recipe": "building",
+  "source_blend": "fixtures/samurai_yakata.blend",
+  "look": "golden_hour",
+  "budgets": { "max_tris": 63000, "max_materials": 6, "max_texture_px": 1024, "max_file_mb": 12 },
+  "lod_budgets": { "LOD0": 45000, "LOD1": 14000, "LOD2": 4000 },
+  "rules": { "tiling_uvs": true, "origin_tolerance": 1.0 },
+  "recipe_cfg": { "collections": ["yakata_LOD0", "yakata_LOD1", "yakata_LOD2"] },
+  "glb_expect": { "occlusion": ["yk_stone", "yk_plaster", "yk_wood", "yk_shingle", "yk_thatch"] },
+  "export": { "out_dir": "out", "compress": true, "png_fallback": false }
+}

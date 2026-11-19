@@ -238,5 +238,15 @@
   "plaster": false,
   "raised": 0,
   "chimney": false
+ },
+ "ya_bokujo": {
+  "w": 14,
+  "d": 6,
+  "h": 3.2,
+  "shape": "shed",
+  "roof": "plank",
+  "plaster": false,
+  "raised": 0,
+  "chimney": false
  }
 }
