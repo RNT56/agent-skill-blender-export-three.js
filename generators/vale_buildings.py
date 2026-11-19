@@ -19,7 +19,8 @@ A building keeps to its footprint (the game snaps and paths by that box) but doe
 Parameters come from specs/vale_buildings.params.json ({ id: { w, d, h, shape, roof, plaster, raised, chimney } }), which the game writes from
 src/content/buildings.js (tools/export_building_params.mjs there): a new building in the game is a new model here with no further work.
 Objects are named  vb_<id>_LOD<n>_<Material>. Frame: the game's +x is the width, +y up, +z the FRONT (the door, at x = 0); here that is (x, -z, y). y = 0 is
-pad level; the game sets its own stonework round the foot up to BASE.
+the ground (the levelled pad): there is no plinth. Posts stand on half-buried field stones, boards and walls go SINK metres into the earth, a dwelling's
+floor is raised on its stones with the dark under it, and a flat stone lies before every door.
 
   blender -b --factory-startup -P generators/vale_buildings.py -- [--out fixtures/vale_buildings.blend] [--render out/_vb/vb.png]
 """
@@ -37,13 +38,19 @@ from gen_common import ROOT, Roof, D, build_roof, render_preview  # noqa: E402
 from wall_kit import Kit, make_materials  # noqa: E402
 from roofs import thatch_roof, shingle_roof, board_roof, rock, G  # noqa: E402
 
-BASE, M = 0.28, 0.32
+BASE, M, SINK = 0.0, 0.32, 0.24      # BASE: the ground (the levelled pad). Nothing stands ON it: posts, boards and walls go SINK metres into it
 
 
 class B(Kit):
     def __init__(self, lod, seed, P):
         super().__init__(lod, seed)
         self.P, self.bw, self.bd = P, 1.0, 1.0
+
+    def box(self, kind, w, h, d, x, y, z, rz=0.0, rx=0.0, ry=0.0):
+        """whatever is tall and starts at the ground is rooted in it (so no post or wall ever ends in a ruled line on the earth, and a dip never shows a gap)"""
+        if abs(y - BASE) < 1e-6 and h >= 0.3 and not (rz or rx or ry):
+            y, h = y - SINK, h + SINK
+        super().box(kind, w, h, d, x, y, z, rz=rz, rx=rx, ry=ry)
 
     def shift(self, cx, cz):
         """everything built inside is centred on (cx, cz) of the footprint"""
@@ -197,12 +204,14 @@ def frame_walls(K, y0, hw, style, door_u):
             for sx in (-1, 1):
                 for sz in (-1, 1):
                     K.box("Plaster", 0.34, hw, 0.34, sx * bw / 2, BASE, sz * bd / 2)
+                    rock(K, sx * (bw / 2 + 0.08), BASE - 0.18, sz * (bd / 2 + 0.08), r.uniform(0.44, 0.58), flat=0.5)      # a boulder under each corner, half in the earth
         return
     panel = {"earth": "Earth", "plaster": "Plaster", "board": "Wood"}[style]
     if lod == 2:
         K.box(panel, bw, hw + y0 - BASE, bd, 0, BASE, 0)
         return
-    K.box("Wood", bw - 0.3, y0 - BASE, bd - 0.3, 0, BASE, 0)                                           # the dark under the floor
+    if y0 - BASE < 0.6:                                                                                # (a granary on stilts is open underneath)
+        K.box("Wood", bw - 0.56, y0 - BASE + SINK, bd - 0.56, 0, BASE - SINK, 0)                         # the dark under the floor, well back from the sill
     K.box(panel, bw - 0.1, hw, bd - 0.1, 0, y0, 0)
     t = 0.19
     for side in "fblr":
@@ -214,7 +223,7 @@ def frame_walls(K, y0, hw, style, door_u):
             if side in "fb" or 0 < i < n:                                                              # every post stands on a stone
                 hx, hz = K.bw / 2, K.bd / 2
                 px, pz = {"f": (u, hz - 0.05), "b": (-u, -hz + 0.05), "l": (-hx + 0.05, u), "r": (hx - 0.05, -u)}[side]
-                rock(K, px, BASE - 0.1, pz, r.uniform(0.2, 0.27), flat=0.7)
+                rock(K, px, BASE - 0.12, pz, r.uniform(0.24, 0.34), flat=0.7)
         K.fbox("Wood", side, L, 0.17, 0.15, 0, y0 - 0.02, 0.0)                                         # sill
         K.fbox("Wood", side, L, 0.18, 0.15, 0, y0 + hw - 0.18, 0.0)                                    # plate
         if style != "board":
@@ -450,7 +459,7 @@ def hall(K, bid):
     cx, cz = lw / 2, (M - fz) / 2
     K.bw, K.bd = bw, bd
     hw = (H - raised) * (0.41 if thatch else 0.5)
-    y0 = BASE + raised + (0.0 if kura else 0.17)
+    y0 = BASE + raised + (0.0 if kura else 0.36 if eng else 0.2)                                      # a dwelling's boarded floor stands clear of the damp on its stones; a workshop's is the earth
     style = "kura" if kura else "board" if (hut or roof == "plank") else "earth" if thatch else "plaster"
     du = -cx                                                                                          # the door stays at the footprint's x = 0
     shop = bid in ("weaver", "bowyer", "sake_brewery", "armourer", "smithy")
@@ -474,6 +483,11 @@ def hall(K, bid):
         frame_walls(K, y0, hw, style, du)
         dh = min(1.9, hw * 0.82)
         door(K, y0, dh, du, 1.1 if not kura else 1.2, kura, shop)
+        if lod < 2 and not raised:                                                                    # kutsunugi-ishi: the broad flat stone one steps up from
+            sz_, top_ = bd / 2 + (1.36 if eng else 0.46), max(0.05, (y0 + (0.02 if eng else 0.0)) - BASE - 0.15)      # its top a comfortable step below the floor
+            rock(K, du + K.r.uniform(-0.1, 0.1), BASE + top_ - 0.21, sz_ - 0.08, 0.58, flat=0.24)             # a slab, most of it in the earth (rock(): top = y + 1.5 s flat)
+            if eng:
+                rock(K, du + K.r.uniform(-0.3, 0.3), BASE + 0.05 - 0.12, sz_ + 0.62, 0.4, flat=0.2)
         if bid == "nagaya" and lod < 2:                                                               # a row house: a door to every lodging
             for u in (du - bw * 0.3, du + bw * 0.3):
                 if abs(u) < bw / 2 - 0.9:
@@ -603,6 +617,7 @@ def stone_lantern(K, x, z, y=BASE):
     if K.lod == 2:
         K.box("Stone", 0.4, 1.5, 0.4, x, y, z)
         return
+    rock(K, x, y - 0.14, z, 0.46, flat=0.5)                                                            # it stands on a rough stone, not on a slab
     disc(K, "Stone", x, y, z, 0.3, 0.16, 10)
     disc(K, "Stone", x, y + 0.16, z, 0.11, 0.72, 8)
     disc(K, "Stone", x, y + 0.88, z, 0.25, 0.09, 10)
@@ -711,6 +726,12 @@ def stalls(K, bid):
             for pz, ph in ((-1, 2.05), (1, 2.5)):
                 K.box("Wood", 0.11, ph, 0.11, cx + px * (sw / 2 - 0.06), BASE, cz + pz * (sd / 2 - 0.06))
         pent(K, cx - sw / 2, cx + sw / 2, cz + sd / 2 + 0.25, cz - sd / 2 - 0.3, BASE + 2.62, BASE + 2.0, "Shingle", posts=False)
+        nb = 6 if lod == 0 else 1                                                                     # duckboards under the stall, on two sleepers
+        for i in range(nb):
+            K.box("WoodL", (sw - 0.3) / nb - (0.02 if nb > 1 else 0), 0.045, sd - 0.5 + (r.uniform(-0.12, 0.12) if nb > 1 else 0), cx - (sw - 0.3) / 2 + (sw - 0.3) * (i + 0.5) / nb, BASE + 0.07, cz - 0.1, rz=r.uniform(-0.02, 0.02) if nb > 1 else 0.0)
+        if lod < 2:
+            for pz in (-1, 1):
+                K.box("Wood", sw - 0.1, 0.16, 0.12, cx, BASE - 0.08, cz - 0.1 + pz * (sd / 2 - 0.55))
         K.box("WoodL", sw - 0.2, 0.06, 0.7, cx, BASE + 0.84, cz + sd / 2 - 0.5)                        # the counter
         if lod < 2:
             K.box("Wood", sw - 0.24, 0.84, 0.05, cx, BASE, cz + sd / 2 - 0.2)
@@ -723,17 +744,17 @@ def stalls(K, bid):
     spots = ((-w * 0.3, d * 0.2, 1.35, 2.35), (w * 0.02, d * 0.3, 1.2, 2.15), (w * 0.31, d * 0.16, 1.45, 2.5))
     for i, (x, z, rr, hh) in enumerate(spots):
         umbrella(K, x, z, BASE, rr, hh)
-        K.box("Thatch", 1.7, 0.03, 1.2, x + 0.1, BASE, z + 0.15, rz=r.uniform(-0.3, 0.3))             # the mat the goods lie on
+        K.box("Thatch", 1.7, 0.06, 1.2, x + 0.1, BASE - 0.01, z + 0.15, rz=r.uniform(-0.3, 0.3))      # the mat the goods lie on
         if lod < 2:
             for k in range(4):
                 a = 0.8 + k * 1.5
                 px, pz = x + 0.1 + math.cos(a) * 0.5, z + 0.15 + math.sin(a) * 0.36
                 if (i + k) % 3 == 0:
-                    jar(K, px, pz, BASE + 0.03, 0.7)
+                    jar(K, px, pz, BASE + 0.05, 0.7)
                 elif (i + k) % 3 == 1:
-                    basket(K, px, pz, BASE + 0.03, 0.26, "Earth" if k % 2 else "Thatch")
+                    basket(K, px, pz, BASE + 0.05, 0.26, "Earth" if k % 2 else "Thatch")
                 else:
-                    barrel(K, px, pz, BASE + 0.03, 0.22, 0.3, lid=False)
+                    barrel(K, px, pz, BASE + 0.05, 0.22, 0.3, lid=False)
     if lod < 2:                                                                                       # a handcart come in from the fields
         cx, cz = w * 0.36, -d * 0.02
         K.box("WoodL", 1.5, 0.07, 0.9, cx, BASE + 0.52, cz)
@@ -773,8 +794,12 @@ def shrine(K, bid):
         K.m["Stone"].cone(G(-2.0, BASE + 0.26, 0.2), (0, 0, 1), 0.3, 0.42, 0.52, 12)
         disc(K, "Tile", -2.0, BASE + 0.5, 0.2, 0.3, 0.03, 12)
         K.rod("WoodL", (-2.3, BASE + 0.55, 0.2), (-1.65, BASE + 0.57, 0.35), 0.015, 4)
-        for i in range(5):                                                                            # stepping stones up the middle
-            rock(K, r.uniform(-0.12, 0.12), BASE - 0.1, tz - 1.0 - i * 0.78, 0.3, flat=0.3)
+        z_, i = d / 2 - 0.25, 0                                                                       # tobi-ishi: stepping stones from the torii to the steps, set by eye
+        while z_ > -d / 2 + 2.05 + 1.0 + 2.2:
+            sz_ = r.uniform(0.4, 0.56)
+            rock(K, (0.2 if i % 2 else -0.2) + r.uniform(-0.1, 0.1), BASE + 0.05 - 1.5 * sz_ * 0.17, z_, sz_, flat=0.17)
+            z_ -= sz_ * 1.5 + r.uniform(0.0, 0.14)
+            i += 1
     # the hall
     hz, bw, bd, fl = -d / 2 + 2.05, 2.5, 2.0, BASE + 0.95
     for sx in (-1, 0, 1):
