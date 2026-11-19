@@ -1,0 +1,106 @@
+{
+ "name": "archer_unit_02",
+ "type": "character",
+ "recipe": "character",
+ "source_blend": "fixtures/archer_unit_02.blend",
+ "preview": false,
+ "budgets": {
+  "max_tris": 112000,
+  "max_materials": 1,
+  "max_texture_px": 4096,
+  "max_file_mb": 32
+ },
+ "lod_budgets": {
+  "LOD0": 36400,
+  "LOD1": 12600
+ },
+ "rules": {
+  "origin_tolerance": 0.05,
+  "allow_non_manifold": true
+ },
+ "recipe_cfg": {
+  "collection": "archer_game"
+ },
+ "character": {
+  "max_bones": 64,
+  "max_influences": 4,
+  "clips": {
+   "equip": {
+    "loop": false
+   },
+   "idle": {
+    "loop": true
+   },
+   "walk": {
+    "loop": true
+   },
+   "run": {
+    "loop": true
+   },
+   "ready": {
+    "loop": false
+   },
+   "stand_down": {
+    "loop": false
+   },
+   "combat_idle": {
+    "loop": true
+   },
+   "shoot": {
+    "loop": false
+   },
+   "aim": {
+    "loop": true
+   },
+   "crouch_idle": {
+    "loop": true
+   },
+   "sneak": {
+    "loop": true
+   },
+   "crouch_shoot": {
+    "loop": false
+   },
+   "hit": {
+    "loop": false
+   },
+   "death": {
+    "loop": false
+   }
+  },
+  "team_mask": "out/archer_unit_02_tex/archer_team.png",
+  "cloth": {
+   "json": "out/archer_unit_02_tex/archer_cloth.json"
+  },
+  "emblems": {
+   "png": "out/archer_unit_02_tex/archer_emblems.png",
+   "json": "out/archer_unit_02_tex/archer_emblems.json"
+  }
+ },
+ "glb_expect": {
+  "occlusion": [
+   "archer_mat"
+  ],
+  "joints_max": 64,
+  "animations": [
+   "equip",
+   "idle",
+   "walk",
+   "run",
+   "ready",
+   "stand_down",
+   "combat_idle",
+   "shoot",
+   "aim",
+   "crouch_idle",
+   "sneak",
+   "crouch_shoot",
+   "hit",
+   "death"
+  ]
+ },
+ "export": {
+  "out_dir": "out",
+  "compress": false
+ }
+}
