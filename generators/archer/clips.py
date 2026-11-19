@@ -50,10 +50,12 @@ def hd(hrot, d):
 
 
 # ------------------------------------------------------------------------------------------------------------- pose pieces
-def foot(x, y, yaw, pitch=0.0, toe=0.0, z=AZ, knee=None, kpole=None):
+def foot(x, y, yaw, pitch=0.0, toe=0.0, z=AZ, knee=None, kpole=None, instep=False):
     d = dict(pos=V((x, y, z)), yaw=yaw, pitch=pitch, toe=toe, knee=yaw if knee is None else knee)
     if kpole is not None:
         d["kpole"] = V(kpole)
+    if instep:                      # the foot turns rigidly by its pitch (anim.Solver.leg): an instep on the ground, the sole up
+        d["instep"] = True
     return d
 
 
@@ -297,7 +299,7 @@ def death(t):
 # ------------------------------------------------------------------------------------------------------------- hidden in the grass
 KN_DZ = -0.415
 KN_FL = foot(0.030, -0.330, -30.0, knee=-20.0)
-KN_FR = foot(0.085, 0.455, -60.0, pitch=72.0, toe=-40.0, z=0.075, kpole=(-0.25, -0.45, -1.0))
+KN_FR = foot(0.085, 0.455, -24.0, pitch=148.0, z=0.075, kpole=(-0.25, -0.45, -1.0), instep=True)     # the right knee down, the shin and the foot in line along the ground, the instep down
 
 
 def crouch_pose(breath=0.0, sway=0.0):

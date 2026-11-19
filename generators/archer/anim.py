@@ -117,7 +117,10 @@ class Solver:
         p.limb(f"thigh.{side}", f"shin.{side}", f"foot.{side}", V(F["pos"]), pole, 1)
         d = Euler((pitch, 0, 0), "XYZ").to_matrix() @ self.foot_rest_dir
         d = Euler((0, 0, yaw), "XYZ").to_matrix() @ d
-        p.aim(f"foot.{side}", d, Euler((0, 0, yaw), "XYZ").to_matrix() @ V((0, 0, 1)))
+        up = V((0, 0, 1))
+        if F.get("instep"):                 # the foot turns rigidly by its pitch (an instep on the ground): past ~70 deg the up hint would roll it 180 deg and wring the ankle
+            up = Euler((pitch, 0, 0), "XYZ").to_matrix() @ up
+        p.aim(f"foot.{side}", d, Euler((0, 0, yaw), "XYZ").to_matrix() @ up)
         p.rot(f"toe.{side}", (F.get("toe", 0.0), 0, 0))
 
     def arm_ik(self, p, side, wrist, pole=None):

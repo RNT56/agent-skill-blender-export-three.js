@@ -271,6 +271,22 @@ for name in CR:
         for k in top:
             top[k] = max(top[k], float(evaluated(k)[:, 2].max()))
     info[name] = {k: round(z, 3) for k, z in top.items()}
+# the kneeling (right) foot of crouch_idle: the shin lies on the ground and the foot goes on in line with it, the instep down and the sole up. A foot aimed with a fixed
+# world-up hint past ~70 deg of pitch rolls over (sole down, the toes pointing back from the knee: a wrung ankle). Measured on the baked Action: the foot bone's top axis (z)
+# points down, and the lowest skinned vertex of the foot and toes (LOD0) is on the ground (-10 .. +40 mm).
+_fg = {g.index for g in body.vertex_groups if g.name in ("foot.R", "toe.R")}
+_fv = np.array([sum(g.weight for g in v.groups if g.group in _fg) > 0.5 for v in body.data.vertices])
+top, low = [], []
+for _ in frames("crouch_idle"):
+    top.append((arm.matrix_world.to_3x3() @ arm.pose.bones["foot.R"].matrix.to_3x3().col[2]).z)
+    low.append(float(evaluated("Ashigaru_LOD0")[_fv][:, 2].min()))
+check("crouch_idle: the kneeling foot lies on its instep, the sole up (the foot's top axis points down every frame) and on the ground (lowest foot vertex -10 .. +40 mm)",
+      max(top) < -0.8 and -0.010 < min(low) and max(low) < 0.040, f"top axis z {min(top):+.2f} .. {max(top):+.2f}, lowest vertex {min(low) * 1000:.0f} .. {max(low) * 1000:.0f} mm")
+from ashigaru import anim  # noqa: E402
+_P = clips.crouch_idle(0.0)
+_P["footR"] = {k: v for k, v in _P["footR"].items() if k != "instep"}
+_tz = anim.Solver(arm).solve(_P).matrices()["foot.R"].to_3x3().col[2].z
+check("negative: the same kneeling foot solved without `instep` (fixed world-up hint) rolls over: its top faces up, the sole down", _tz > 0.5, f"top axis z {_tz:+.2f}")
 print("info  heights (m), bare body and spears:", hi)
 print("info  heights (m) of optional pieces and far meshes in the crouch clips (not gated):", info)
 arm.animation_data.action = None

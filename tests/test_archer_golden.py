@@ -142,6 +142,41 @@ for name in ("walk", "run", "sneak"):                                  # planted
     sp = sum(v) / max(len(v), 1)
     check(f"{name}: the planted foot moves at the clip's stride speed", len(v) >= 3 and abs(sp - acts[name]["gp_speed"]) < 0.04 * acts[name]["gp_speed"], f"{sp:.3f} vs {acts[name]['gp_speed']:.3f} m/s over {len(v)} frames")
     check(f"{name}: a loop (first key == last key on every bone)", all((pts[0] - pts[-1]).length < 1e-5 for _ in (0,)))
+
+# the kneeling (right) foot in the crouch clips: the shin lies on the ground and the foot goes on in line with it, the instep down and the sole up. A foot aimed with a fixed
+# world-up hint past ~70 deg of pitch rolls over (sole down, the toes pointing back: a wrung ankle) or, steeper, is driven into the ground. Measured on the baked Actions:
+# the foot bone's top axis (z) points down, and the lowest skinned vertex of the foot and toes (LOD0) is on the ground (-10 .. +40 mm).
+import numpy as np  # noqa: E402
+
+_body = bpy.data.objects["Archer_LOD0"]
+_fg = {g.index for g in _body.vertex_groups if g.name in ("foot.R", "toe.R")}
+_fv = np.array([sum(g.weight for g in v.groups if g.group in _fg) > 0.5 for v in _body.data.vertices])
+
+
+def foot_low():
+    e = _body.evaluated_get(bpy.context.evaluated_depsgraph_get())
+    me = e.to_mesh()
+    a = np.empty(len(me.vertices) * 3, dtype=np.float64)
+    me.vertices.foreach_get("co", a)
+    e.to_mesh_clear()
+    return float((a.reshape(-1, 3)[_fv] @ np.array(_body.matrix_world)[:3, :3].T + np.array(_body.matrix_world)[:3, 3])[:, 2].min())
+
+
+for name in ("crouch_idle", "crouch_shoot"):
+    f0, f1 = play(name)
+    top, low = [], []
+    for f in range(f0, f1 + 1):
+        sc.frame_set(f)
+        bpy.context.view_layer.update()
+        top.append((arm.matrix_world.to_3x3() @ arm.pose.bones["foot.R"].matrix.to_3x3().col[2]).z)
+        low.append(foot_low())
+    check(f"{name}: the kneeling foot lies on its instep, the sole up (the foot's top axis points down every frame) and on the ground (lowest foot vertex -10 .. +40 mm)",
+          max(top) < -0.8 and -0.010 < min(low) and max(low) < 0.040, f"top axis z {min(top):+.2f} .. {max(top):+.2f}, lowest vertex {min(low) * 1000:.0f} .. {max(low) * 1000:.0f} mm")
+_sv = anim.Solver(arm)
+_P = clips.crouch_idle(0.0)
+_P["footR"] = {k: v for k, v in _P["footR"].items() if k != "instep"}
+_tz = _sv.solve(_P).matrices()["foot.R"].to_3x3().col[2].z
+check("negative: the same kneeling foot solved without `instep` (fixed world-up hint) rolls over: its top faces up, the sole down", _tz > 0.5, f"top axis z {_tz:+.2f}")
 arm.animation_data.action = None
 
 # ---------------------------------------------------------------------------------------------------------------- shipped side files

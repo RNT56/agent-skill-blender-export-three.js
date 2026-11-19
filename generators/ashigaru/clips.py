@@ -41,10 +41,12 @@ def pw(keys, t, ease=True):
 
 
 # ------------------------------------------------------------------------------------------------------------- pose pieces
-def foot(x, y, yaw, pitch=0.0, toe=0.0, z=AZ, knee=None, kpole=None):
+def foot(x, y, yaw, pitch=0.0, toe=0.0, z=AZ, knee=None, kpole=None, instep=False):
     d = dict(pos=V((x, y, z)), yaw=yaw, pitch=pitch, toe=toe, knee=yaw if knee is None else knee)
     if kpole is not None:
         d["kpole"] = V(kpole)
+    if instep:                      # the foot turns rigidly by its pitch (anim.Solver.leg): an instep on the ground, the sole up
+        d["instep"] = True
     return d
 
 
@@ -263,7 +265,7 @@ def death(t):
 # forward (the long pike `pike_up` further up, as wherever it is levelled); the shaft never rises, the pennant hangs off it.
 KN_DZ = -0.550                                                       # down on the right knee, sitting back toward the heel
 KN_FL = foot(0.120, -0.300, -8.0)                                    # the left foot forward, the knee up
-KN_FR = foot(-0.110, 0.248, -6.0, pitch=142.0, z=0.098, kpole=(0.0, -0.45, -1.0))     # the right knee on the ground, the shin along it, the instep down
+KN_FR = foot(-0.110, 0.248, -6.0, pitch=142.0, z=0.098, kpole=(0.0, -0.45, -1.0), instep=True)     # the right knee on the ground, the shin along it, the instep down
 KN_B = V((-0.300, -0.220, 0.320))                                    # the right hand on the shaft, beside the knee on the ground
 KN_D = V((0.030, -1.0, -0.010))                                      # level, the point forward
 LOW_GRIP = 1.05                                                      # near the balance point of the short spear
