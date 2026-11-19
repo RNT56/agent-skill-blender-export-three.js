@@ -1,0 +1,123 @@
+{
+ "name": "villager_unit_03",
+ "type": "character",
+ "recipe": "character",
+ "source_blend": "fixtures/villager_unit_03.blend",
+ "preview": false,
+ "budgets": {
+  "max_tris": 19000,
+  "max_materials": 1,
+  "max_texture_px": 1024,
+  "max_file_mb": 9
+ },
+ "lod_budgets": {
+  "LOD0": 12000,
+  "LOD1": 4000,
+  "LOD2": 1300
+ },
+ "rules": {
+  "origin_tolerance": 0.05
+ },
+ "recipe_cfg": {
+  "collection": "villager_game"
+ },
+ "character": {
+  "max_bones": 40,
+  "max_influences": 4,
+  "clips": {
+   "idle": {
+    "loop": true
+   },
+   "walk": {
+    "loop": true
+   },
+   "run": {
+    "loop": true
+   },
+   "walk_tool": {
+    "loop": true
+   },
+   "run_tool": {
+    "loop": true
+   },
+   "carry_shoulder_idle": {
+    "loop": true
+   },
+   "carry_shoulder_walk": {
+    "loop": true
+   },
+   "carry_shoulder_run": {
+    "loop": true
+   },
+   "carry_front_idle": {
+    "loop": true
+   },
+   "carry_front_walk": {
+    "loop": true
+   },
+   "carry_front_run": {
+    "loop": true
+   },
+   "chop": {
+    "loop": true
+   },
+   "mine": {
+    "loop": true
+   },
+   "hoe": {
+    "loop": true
+   },
+   "hammer": {
+    "loop": true
+   },
+   "chisel": {
+    "loop": true
+   },
+   "saw": {
+    "loop": true
+   },
+   "cut": {
+    "loop": true
+   },
+   "fish": {
+    "loop": true
+   },
+   "craft": {
+    "loop": true
+   }
+  },
+  "team_mask": "out/villager_unit_03_tex/villager_team.png"
+ },
+ "glb_expect": {
+  "occlusion": [
+   "villager_mat"
+  ],
+  "joints_max": 40,
+  "animations": [
+   "idle",
+   "walk",
+   "run",
+   "walk_tool",
+   "run_tool",
+   "carry_shoulder_idle",
+   "carry_shoulder_walk",
+   "carry_shoulder_run",
+   "carry_front_idle",
+   "carry_front_walk",
+   "carry_front_run",
+   "chop",
+   "mine",
+   "hoe",
+   "hammer",
+   "chisel",
+   "saw",
+   "cut",
+   "fish",
+   "craft"
+  ]
+ },
+ "export": {
+  "out_dir": "out",
+  "compress": false
+ }
+}
