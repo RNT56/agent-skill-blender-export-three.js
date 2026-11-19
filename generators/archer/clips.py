@@ -8,6 +8,7 @@ import math
 
 from mathutils import Euler, Vector
 
+from samurai import gait
 from samurai.clips import keyed, lift_sliding_feet
 
 from . import rig as R
@@ -114,37 +115,23 @@ def ease_pose(dz=0.0, sway=0.0, breath=0.0, look=0.0):
 
 
 def idle(t):
-    ph = TAU * t / 4.0
+    ph = TAU * t / 8.0                                                       # a breath every 4 s; now and then he looks down the field
     look = 14.0 * smooth((math.sin(ph) - 0.55) / 0.45)                       # now and then he looks down the field
     return finish(ease_pose(0.004 * math.sin(ph * 2), math.sin(ph), math.sin(ph * 2 + 0.6), look))
 
 
-def locomotion(t, T, sweep, duty, lift, bob, lean, swing, sink, spacing=0.095, kick=0.0, arm_bend=0.0, bow=None, crouch=0.0):
-    """Planted-foot cycle (forward = -Y). The bow rides in the left hand, steady; the right arm swings."""
-    ph = (t % T) / T
-    feet = {}
-    for side, off in (("L", 0.0), ("R", 0.5)):
-        u = (ph + off) % 1.0
-        sx = 1.0 if side == "L" else -1.0
-        if u < duty:
-            s = u / duty
-            y = lerp(-sweep, sweep, s)
-            z = AZ + 0.045 * smooth((s - 0.72) / 0.28)
-            pitch = lerp(-12.0, 0.0, smooth(s / 0.25)) + 30.0 * smooth((s - 0.75) / 0.25)
-        else:
-            s = (u - duty) / (1.0 - duty)
-            y = lerp(sweep + kick, -sweep, smooth(s))
-            z = AZ + 0.045 * (1 - smooth(s / 0.5)) + lift * math.sin(math.pi * min(s * 1.08, 1.0)) ** 0.9
-            pitch = lerp(30.0, -12.0, smooth(s))
-        feet[side] = foot(sx * spacing, y, sx * 4.0, pitch, -0.5 * pitch if pitch > 0 else 0.0, z)
-    ph2 = TAU * ph
-    hz = -sink + bob * math.cos(2 * ph2 - 2 * TAU * 0.5 * duty * 0.9)
-    hips = V((0.020 * math.cos(ph2), 0.0, hz))
-    sw = swing * math.sin(ph2 + 0.2)
-    G, U, W, pole = bow
-    b = bowd(V(G) + hips + V((0.0, 0.04 * sw, 0.012 * math.cos(2 * ph2))), U, V(W) + V((0.03 * math.sin(ph2), 0.0, 0.0)), pole)
-    P = dict(hips_pos=hips, hips_rot=(lean * 0.4, 0.0, 7.0 * math.sin(ph2 + 0.2)), spine=(lean * 0.8 + crouch, -9.0 * math.sin(ph2 + 0.2) * (1 - 0.5 * min(crouch / 20.0, 1.0)), 2.5 * math.sin(ph2)),
-             neck=(-lean * 0.6 - crouch * 0.9, 4.0 * math.sin(ph2 + 0.2), 0.0), footL=feet["L"], footR=feet["R"], bow=b,
+def locomotion(t, G, lean, swing, arm_bend=0.0, bow=None, crouch=0.0):
+    """Planted-foot cycle (samurai.gait.cycle: G = dict(T, ahead, behind, duty, lift, bob, sink, ...); forward = -Y). The bow rides in the left hand, steady; the right arm swings."""
+    feet, hips, ph2 = gait.cycle(t, **G)
+    fl, fr = feet["L"], feet["R"]
+    sink = G["sink"]
+    tw = math.sin(ph2 + 0.2)
+    sw = swing * tw
+    Gb, U, W, pole = bow
+    b = bowd(V(Gb) + hips + V((0.0, 0.04 * sw, 0.012 * math.cos(2 * ph2))), U, V(W) + V((0.03 * math.sin(ph2), 0.0, 0.0)), pole)
+    P = dict(hips_pos=hips, hips_rot=(lean * 0.4, 0.0, 7.0 * tw), spine=(lean * 0.8 + crouch, -9.0 * tw * (1 - 0.5 * min(crouch / 20.0, 1.0)), 2.5 * math.sin(ph2)),
+             neck=(-lean * 0.6 - crouch * 0.9, 4.0 * tw, 0.0),
+             footL=foot(fl["pos"].x, fl["pos"].y, fl["yaw"], fl["pitch"], fl["toe"], fl["pos"].z), footR=foot(fr["pos"].x, fr["pos"].y, fr["yaw"], fr["pitch"], fr["toe"], fr["pos"].z), bow=b,
              handR=dict(pos=V((-0.285 - 0.02 * arm_bend, -0.02 - sw, 0.93 + 0.15 * arm_bend - 0.25 * sink * min(crouch / 20.0, 1.0))), pole=V((-0.5, 0.6, -0.5)), space="hips"),
              curl_L=0.85, curl_R=0.30, nockw=0.0, draw=0.0, arrow_w=0.0)
     return P
@@ -154,17 +141,24 @@ BOW_WALK = ((0.335, -0.225, 1.035), (0.04, -0.80, -0.60), (-0.07, -0.60, 0.80), 
 BOW_RUN = ((0.345, -0.170, 1.010), (0.05, -0.64, -0.77), (-0.08, -0.77, 0.64), (0.6, 0.5, -0.6))            # and further when he runs
 BOW_SNEAK = ((0.215, -0.300, 0.985), (0.10, -0.62, -0.78), (0.86, -0.46, 0.22), (0.5, 0.4, -0.7))           # held low and level across the front, under the grass tops
 
+# a march of 120 steps a minute at 1.2 m/s; a run of 167 at the archer's 3.2 m/s; a creep of 110 at the sim's 1.2 m/s for a crouched man (the game plays a clip at
+# measured speed / stride speed, so at the unit's own speed these play as authored)
+WALK_V, RUN_V, SNEAK_V = 1.20, 3.20, 1.20
+WALK_G = dict(T=1.00, ahead=0.300, behind=0.444, duty=gait.duty_for(WALK_V, 1.00, 0.300, 0.444), lift=0.080, bob=0.020, sink=0.045, rise=0.070)
+RUN_G = dict(T=0.72, ahead=0.240, behind=0.432, duty=gait.duty_for(RUN_V, 0.72, 0.240, 0.432), lift=0.180, bob=0.042, sink=0.080, rise=0.105, spacing=0.085, run=True, toe=46.0)
+SNEAK_G = dict(T=1.10, ahead=0.340, behind=0.400, duty=gait.duty_for(SNEAK_V, 1.10, 0.340, 0.400), lift=0.060, bob=0.012, sink=0.300, rise=0.050, spacing=0.110)
+
 
 def walk(t):
-    return locomotion(t, 0.92, 0.30, 0.60, 0.085, 0.020, 3.0, 0.18, 0.030, bow=BOW_WALK)
+    return locomotion(t, WALK_G, 3.0, 0.18, bow=BOW_WALK)
 
 
 def run(t):
-    return locomotion(t, 0.62, 0.33, 0.34, 0.17, 0.045, 9.0, 0.28, 0.06, spacing=0.085, kick=0.24, arm_bend=1.0, bow=BOW_RUN)
+    return locomotion(t, RUN_G, 9.0, 0.28, arm_bend=1.0, bow=BOW_RUN)
 
 
 def sneak(t):
-    return locomotion(t, 0.84, 0.27, 0.60, 0.060, 0.012, 10.0, 0.08, 0.30, spacing=0.11, arm_bend=0.6, bow=BOW_SNEAK, crouch=22.0)
+    return locomotion(t, SNEAK_G, 10.0, 0.08, arm_bend=0.6, bow=BOW_SNEAK, crouch=22.0)
 
 
 # ------------------------------------------------------------------------------------------------------------- the stance and the shot
@@ -180,6 +174,8 @@ BOW_LOOSE = bowd((-0.135, -0.716, 1.374), (0.00, -0.9995, 0.03), (-0.32, -0.11, 
 BOW_AFTER = bowd((-0.135, -0.710, 1.366), (0.00, -0.9995, 0.02), (-0.30, -0.18, 0.935), pole=(0.5, 0.0, -0.9))
 REL_T = 0.80
 SHOT_T = 35.0 / 30.0
+READY_T = 0.70                 # into and out of the stance
+DEATH_T = 1.25                 # real time (the game no longer speeds it up): the blow, the knees go, the ground at 1.0 s, a settle
 
 
 def ready_pose(dz=0.0, sway=0.0):
@@ -188,7 +184,7 @@ def ready_pose(dz=0.0, sway=0.0):
 
 
 def combat_idle(t):
-    ph = TAU * t / 2.4
+    ph = TAU * t / 4.0                                                       # in the stance: a breath every 2 s
     return finish(ready_pose(0.005 * math.sin(ph * 2), math.sin(ph)), nockw=1.0)
 
 
@@ -250,24 +246,24 @@ def shoot(t):
 
 def aim(t):
     """Held at full draw (a volley waiting for the signal): the same pose as the shot's last instant, breathing."""
-    ph = TAU * t / 2.0
+    ph = TAU * t / 3.0
     b = bowd(V(BOW_AIM["G"]) + V((0.002 * math.sin(ph), 0.0, 0.004 * math.sin(ph * 2))), BOW_AIM["U"], BOW_AIM["W"], BOW_AIM["pole"])
     P = pose((0.0, -0.030, -0.050 + 0.003 * math.sin(ph * 2)), ST_HROT, (0, 3, -8), (3, 0, 72), foot(*ST_FL), foot(*ST_FR), b, curl=(0.92, 0.78), spole=(0.35, 1.0, -0.10), draw=1.0)
-    return finish(P, 1.0, 1.0 + 0.006 * math.sin(TAU * 4.5 * t) + 0.004 * math.sin(ph * 2 + 1.0), 1.0)
+    return finish(P, 1.0, 1.0 + 0.005 * math.sin(TAU * 4.0 * t) + 0.004 * math.sin(ph * 2 + 1.0), 1.0)
 
 
 def ready(t):
     """From standing at ease into the shooting stance: a step, the turn side-on, the string hand goes to the string."""
-    T = 0.6
+    T = READY_T
     mid = pose((0.0, -0.006, -0.040), (0, 0, -40.0), (2.5, 0, -3), (1, 0, 36), foot(0.095, -0.150, -26.0), foot(-0.085, 0.140, -55.0),
                bowd((0.110, -0.420, 1.110), (-0.05, -0.99, -0.15), (0.10, -0.15, 0.98), pole=(0.5, 0.3, -0.8)),
                handd((-0.200, -0.180, 1.020), (0.10, -0.80, -0.55), (0.60, 0.10, -0.80)), curl=(0.85, 0.40))
     keys = [(0.0, ease_pose()), (0.5 * T, mid), (T, ready_pose())]
-    return finish(_keyed(keys, t), nockw=pw([(0.0, 0.0), (0.30, 0.0), (0.56, 1.0)], t))
+    return finish(_keyed(keys, t), nockw=pw([(0.0, 0.0), (0.50 * T, 0.0), (0.93 * T, 1.0)], t))
 
 
 def stand_down(t):
-    return ready(0.6 - t)
+    return ready(READY_T - t)
 
 
 def hit(t):
@@ -285,7 +281,7 @@ def hit(t):
 
 def death(t):
     """Struck: he staggers back off the line, the knees go, he falls on his back; the bow drops from the open hand's reach."""
-    T = 1.6
+    T = DEATH_T
     r = ready_pose()
     k1 = pose((0.02, 0.120, -0.090), (-8, 4, -56), (-12, 8, -2), (-14, -6, 40), foot(0.060, -0.200, -40.0), foot(-0.040, 0.300, -90.0),
               bowd((0.060, -0.420, 1.060), (-0.05, -0.95, -0.30), (0.25, -0.25, 0.93)), handd((-0.300, 0.150, 1.050), (-0.40, 0.20, -0.90), (0.80, 0.10, -0.50)), curl=(0.6, 0.3))
@@ -293,7 +289,8 @@ def death(t):
               bowd((0.330, -0.250, 0.620), (0.10, -0.75, -0.65), (0.55, -0.55, 0.63)), handd((-0.400, 0.300, 0.560), (-0.60, 0.30, -0.75), (0.60, 0.00, -0.80)), curl=(0.35, 0.2))
     k3 = pose((0.05, 0.340, -0.790), (-74, 2, -18), (-12, 2, 0), (-8, 0, 8), foot(0.150, -0.050, -8.0), foot(-0.140, 0.140, -30.0),
               bowd((0.560, 0.220, 0.085), (0.25, -0.20, -0.95), (0.75, -0.66, 0.02)), handd((-0.520, 0.560, 0.085), (-0.75, 0.60, -0.25), (0.15, 0.10, -0.98)), curl=(0.2, 0.15))
-    keys = [(0.0, r), (0.20 * T, k1), (0.55 * T, k2), (T, k3)]
+    k4 = dict(k3, hips_pos=V(k3["hips_pos"]) + V((0.0, 0.008, 0.006)), spine=(-9, 2, 0))          # the body settles
+    keys = [(0.0, r), (0.19 * T, k1), (0.50 * T, k2), (0.80 * T, k3), (T, k4)]
     return finish(keyed(keys, t), nockw=pw([(0.0, 1.0), (0.10, 0.0)], t))
 
 
@@ -310,7 +307,7 @@ def crouch_pose(breath=0.0, sway=0.0):
 
 
 def crouch_idle(t):
-    ph = TAU * t / 3.2
+    ph = TAU * t / 5.0
     return finish(crouch_pose(math.sin(ph * 2), math.sin(ph)), nockw=1.0)
 
 
@@ -324,24 +321,21 @@ def crouch_shoot(t):
     return _shot(t, _KSHOT_KEYS)
 
 
-WALK_V = 2 * 0.30 / (0.60 * 0.92)
-RUN_V = 2 * 0.33 / (0.34 * 0.62)
-SNEAK_V = 2 * 0.27 / (0.60 * 0.84)
 
 CLIPS = {
-    "idle": dict(fn=idle, duration=4.0, loop=True, weapon="none"),
-    "walk": dict(fn=walk, duration=0.92, loop=True, weapon="none", speed=WALK_V),
-    "run": dict(fn=run, duration=0.62, loop=True, weapon="none", speed=RUN_V),
-    "ready": dict(fn=ready, duration=0.6, loop=False, weapon="none"),
-    "stand_down": dict(fn=stand_down, duration=0.6, loop=False, weapon="none"),
-    "combat_idle": dict(fn=combat_idle, duration=2.4, loop=True, weapon="none"),
+    "idle": dict(fn=idle, duration=8.0, loop=True, weapon="none"),
+    "walk": dict(fn=walk, duration=WALK_G["T"], loop=True, weapon="none", speed=WALK_V),
+    "run": dict(fn=run, duration=RUN_G["T"], loop=True, weapon="none", speed=RUN_V),
+    "ready": dict(fn=ready, duration=READY_T, loop=False, weapon="none"),
+    "stand_down": dict(fn=stand_down, duration=READY_T, loop=False, weapon="none"),
+    "combat_idle": dict(fn=combat_idle, duration=4.0, loop=True, weapon="none"),
     "shoot": dict(fn=shoot, duration=SHOT_T, loop=False, weapon="none", events={"arrow": 0.1333, "release": REL_T}),
-    "aim": dict(fn=aim, duration=2.0, loop=True, weapon="arrow"),
-    "crouch_idle": dict(fn=crouch_idle, duration=3.2, loop=True, weapon="none"),
-    "sneak": dict(fn=sneak, duration=0.84, loop=True, weapon="none", speed=SNEAK_V),
+    "aim": dict(fn=aim, duration=3.0, loop=True, weapon="arrow"),
+    "crouch_idle": dict(fn=crouch_idle, duration=5.0, loop=True, weapon="none"),
+    "sneak": dict(fn=sneak, duration=SNEAK_G["T"], loop=True, weapon="none", speed=SNEAK_V),
     "crouch_shoot": dict(fn=crouch_shoot, duration=SHOT_T, loop=False, weapon="none", events={"arrow": 0.1333, "release": REL_T}),
     "hit": dict(fn=hit, duration=0.6, loop=False, weapon="none"),
-    "death": dict(fn=death, duration=1.6, loop=False, weapon="none"),
+    "death": dict(fn=death, duration=DEATH_T, loop=False, weapon="none"),
 }
 
 

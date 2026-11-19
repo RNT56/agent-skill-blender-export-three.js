@@ -33,8 +33,20 @@ tris = {o.name: sum(len(p.vertices) - 2 for p in o.data.polygons) for o in bpy.d
 
 # ---------------------------------------------------------------------------------------------------------------- asset shape
 check("59 bones, inside the 64-bone budget", len(bones) == 59, len(bones))
-check("nodes: three body LODs, the bow, the nocked arrow, the banner", sorted(tris) == ["Archer_LOD0", "Archer_LOD1", "Archer_LOD2", "Arrow_Nocked", "Sashimono", "Yumi"], sorted(tris))
-check("per-LOD triangle budgets", tris["Archer_LOD0"] <= 24000 and tris["Archer_LOD1"] <= 8000 and tris["Archer_LOD2"] <= 2500, tris)
+check("nodes: three body LODs and the bare-headed far mesh, the war hat, the bow, the nocked arrow, the banner", sorted(tris) == ["Archer_Far_Bare", "Archer_LOD0", "Archer_LOD1", "Archer_LOD2", "Arrow_Nocked", "Helmet", "Sashimono", "Yumi"], sorted(tris))
+check("triangle budgets: body 24,000 / 8,000 / 2,500, the bare far mesh 2,500, the hat 2,000", tris["Archer_LOD0"] <= 24000 and tris["Archer_LOD1"] <= 8000 and tris["Archer_LOD2"] <= 2500 and tris["Archer_Far_Bare"] <= 2500 and tris["Helmet"] <= 2000, tris)
+
+
+def _zmax(name, bone=None):
+    o = bpy.data.objects[name]
+    gi = o.vertex_groups[bone].index if bone else None
+    return max(v.co.z for v in o.data.vertices if gi is None or any(g.group == gi and g.weight > 0.5 for g in v.groups))
+
+
+check("the war hat is its own piece on the head bone; the body is whole without it (the bare crown is under 1.78 m, the hat reaches over 1.78 m)",
+      {g.name for g in bpy.data.objects["Helmet"].vertex_groups if any(any(x.group == g.index and x.weight > 0.3 for x in v.groups) for v in bpy.data.objects["Helmet"].data.vertices)} == {"head"}
+      and _zmax("Archer_LOD0", "head") < 1.780 and _zmax("Helmet") > 1.78 and _zmax("Archer_LOD2", "head") > 1.78 and _zmax("Archer_Far_Bare", "head") < 1.780,
+      f"crown {_zmax('Archer_LOD0', 'head'):.3f}, hat {_zmax('Helmet'):.3f}, far with hat {_zmax('Archer_LOD2', 'head'):.3f}, far bare {_zmax('Archer_Far_Bare', 'head'):.3f} m")
 ws = {o.name: gp_character.weight_stats(o, {b.name for b in bones}) for o in bpy.data.objects if o.type == "MESH"}
 check("every vertex weighted, at most 4 influences, no stray groups", all(w[1] == 0 and w[2] <= 4 and not w[3] for w in ws.values()), {k: w[1:] for k, w in ws.items()})
 for n in ("Archer_LOD1", "Archer_LOD2"):

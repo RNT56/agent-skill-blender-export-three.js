@@ -16,7 +16,7 @@ V = Vector
 def face_radii(z):
     """(rx, ry, cy) of the bare head at height z: the samurai's skull with a slightly narrower jaw (shared with the hat cords, the head band and the hair)."""
     rx, ry, cy = SB.head_radii(z)
-    return rx * (1.0 - 0.07 * sstep(1.632, 1.552, z)), ry, cy
+    return rx * (1.0 - 0.03 * sstep(1.632, 1.552, z)), ry, cy
 
 
 def face_n(z):
@@ -102,7 +102,7 @@ def head_parts():
         E.tube(catmull(rim, 3), lambda t: (0.0030, 0.0034 - 0.0008 * t), 5, (True, True))     # the helix
     N = Part("body_neck", "skin", soft="neck", sharp=80)
     mtube(N, [V((0, -0.002, 1.385)), V((0, -0.004, 1.42)), V((0, -0.007, 1.455)), V((0, -0.010, 1.49)), V((0, -0.013, 1.52)), V((0, -0.016, 1.552))],
-          lambda t: (0.0530 - 0.0085 * t + 0.0030 * g(t, 0.0, 0.25), 0.0560 - 0.0070 * t), 12, (True, True),
+          lambda t: (0.0585 - 0.0085 * t + 0.0030 * g(t, 0.0, 0.25), 0.0600 - 0.0070 * t), 12, (True, True),
           mod=lambda t, a: 1.0 + 0.05 * g(t, 0.62, 0.22) * max(0.0, -math.sin(a)) ** 3)        # the throat
     return [P, E, N] + eyes_parts()
 
@@ -128,7 +128,7 @@ def eyes_parts():
 
 
 def hair_parts():
-    """Dark hair at the temples, the sides and the nape (the war hat and the hachimaki hide the crown), drawn back tight."""
+    """Dark hair at the temples, the sides and the nape and over the crown, drawn back tight."""
     H = Part("body_hair", "hair", bone="head", sharp=70)
 
     def fn(u, v):
@@ -139,12 +139,18 @@ def hair_parts():
         return V((x, y, z))
 
     H.slab(param_surf(fn, inside=SA.HEAD_AX), 14, 4, 0.0044, chamfer=0.02, uvf=lambda u, v: (u * 0.42, v * 0.12))
+    # the crown: hair drawn back over the skull, from under the head band to the top. A war hat hides it; without one it is what the game's camera looks down on,
+    # so it is a round dome (the skull under it tapers to a point) with the hair tied in a small knot behind the top (it clears every hat's lining)
+    z0, zt, n = 1.706, 1.770, 20
+    rx0, ry0, cy = face_radii(z0)
     rings = []
-    for z in (1.726, 1.744, 1.759, 1.766):
-        rx, ry, cy = face_radii(min(z, 1.757))
-        k = 1.0 if z < 1.76 else 0.55
-        rings.append([V((math.cos(math.tau * j / 12) * (rx + 0.0046) * k, cy + math.sin(math.tau * j / 12) * (ry + 0.0046) * k, z)) for j in range(12)])
-    H.loft(rings, True, (True, True))
+    for i in range(7):
+        th = (math.pi / 2) * (i / 6.0) * 0.965
+        k, z = math.cos(th), z0 + (zt - z0) * math.sin(th)
+        rings.append([V((math.cos(math.tau * j / n) * (rx0 + 0.0046) * k, cy + math.sin(math.tau * j / n) * (ry0 + 0.0046) * k, z)) for j in range(n)])
+    H.loft(rings, True, (True, True), uv=lambda i, j: (j / n * 0.42, 0.12 + i * 0.012))
+    H.sphere((0.0, cy + 0.036, 1.7655), 0.0105, 0.0260, 0.0062, 8, 5)                        # the knot, lying back along the crown
+    H.sphere((0.0, cy + 0.058, 1.7600), 0.0125, 0.0100, 0.0070, 8, 5)                        # and where it is tied
     rx, ry, cy = face_radii(1.652)
     H.sphere((0.0, cy + ry + 0.012, 1.650), 0.030, 0.024, 0.027, 8, 5)                       # the hair gathered in a knot at the nape, under the hat's brim
     return [H]

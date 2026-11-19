@@ -115,6 +115,41 @@ def _emit_team(mat):
     nt.links.new(em.outputs[0], out.inputs["Surface"])
 
 
+def _emit_white(mat):
+    """Everything emits 1: an EMIT bake of a subset of the objects is that subset's coverage mask in the atlas."""
+    nt = mat.node_tree
+    em = nt.nodes.new("ShaderNodeEmission")
+    em.inputs["Color"].default_value = (1, 1, 1, 1)
+    out = next(n for n in nt.nodes if n.type == "OUTPUT_MATERIAL")
+    nt.links.new(em.outputs[0], out.inputs["Surface"])
+
+
+def _join_copies(objs, name="_bake_sub"):
+    """A joined copy of some of the objects, keeping their (already assigned) atlas UVs."""
+    copies = []
+    for ob in objs:
+        c = ob.copy()
+        c.data = ob.data.copy()
+        c.modifiers.clear()
+        c.parent = None
+        c.hide_render = False                      # the sources are hidden while the occlusion is baked: the copy must not be
+        bpy.context.scene.collection.objects.link(c)
+        copies.append(c)
+    for o in bpy.context.view_layer.objects:
+        if o is not None:
+            o.select_set(False)
+    for c in copies:
+        c.select_set(True)
+    bpy.context.view_layer.objects.active = copies[0]
+    if len(copies) > 1:
+        bpy.ops.object.join()
+    tmp = bpy.context.view_layer.objects.active
+    tmp.name = name
+    tmp.data.uv_layers.active = tmp.data.uv_layers["atlas"]
+    tmp.data.uv_layers["atlas"].active_render = True
+    return tmp
+
+
 def _emit_metal(mat):
     nt = mat.node_tree
     pr = _principled(mat)
@@ -131,7 +166,7 @@ def _emit_metal(mat):
     nt.links.new(emi.outputs[0], out.inputs["Surface"])
 
 
-def _bake_pass(tmp, kind, px, name, color, samples):
+def _bake_pass(tmp, kind, px, name, color, samples, margin=10):
     sc = bpy.context.scene
     img = _image(name, px, color, float_buf=(kind == "NORMAL"))
     originals = [s.material for s in tmp.material_slots]
@@ -149,21 +184,23 @@ def _bake_pass(tmp, kind, px, name, color, samples):
             _emit_metal(c)
         elif kind == "TEAM":
             _emit_team(c)
+        elif kind == "MASK":
+            _emit_white(c)
         elif kind == "ALBEDO":
             _demetalize(c)
     sc.cycles.samples = samples
     _select(tmp)
     if kind == "ALBEDO":
-        bpy.ops.object.bake(type="DIFFUSE", pass_filter={"COLOR"}, margin=10, margin_type="EXTEND", use_clear=True)
+        bpy.ops.object.bake(type="DIFFUSE", pass_filter={"COLOR"}, margin=margin, margin_type="EXTEND", use_clear=True)
     elif kind == "NORMAL":
         sc.render.bake.normal_space = "TANGENT"
-        bpy.ops.object.bake(type="NORMAL", margin=10, margin_type="EXTEND", use_clear=True)
+        bpy.ops.object.bake(type="NORMAL", margin=margin, margin_type="EXTEND", use_clear=True)
     elif kind == "ROUGH":
-        bpy.ops.object.bake(type="ROUGHNESS", margin=10, margin_type="EXTEND", use_clear=True)
-    elif kind in ("METAL", "TEAM"):
-        bpy.ops.object.bake(type="EMIT", margin=10, margin_type="EXTEND", use_clear=True)
+        bpy.ops.object.bake(type="ROUGHNESS", margin=margin, margin_type="EXTEND", use_clear=True)
+    elif kind in ("METAL", "TEAM", "MASK"):
+        bpy.ops.object.bake(type="EMIT", margin=margin, margin_type="EXTEND", use_clear=True)
     elif kind == "AO":
-        bpy.ops.object.bake(type="AO", margin=10, margin_type="EXTEND", use_clear=True)
+        bpy.ops.object.bake(type="AO", margin=margin, margin_type="EXTEND", use_clear=True)
     for i, slot in enumerate(tmp.material_slots):
         slot.material = originals[i]
     for c in copies:
@@ -178,7 +215,53 @@ def _px(img):
     return a.reshape(h, w, 4)
 
 
-def bake_atlas(objs, out_dir, name, px=2048, quality=1.0, log=print, ao_samples=None, ao_blur=False):
+def _dilate(a, cov, n=12):
+    """Grow the covered texels of `a` into the uncovered ones around them, n texels deep (what a bake margin does, for an image composed from several bakes)."""
+    a, cov = a.copy(), cov.copy()
+    for _ in range(n):
+        acc = np.zeros_like(a)
+        cnt = np.zeros_like(a)
+        for ax in (0, 1):
+            for sft in (1, -1):
+                acc += np.roll(a * cov, sft, axis=ax)
+                cnt += np.roll(cov.astype(np.float32), sft, axis=ax)
+        new = (~cov) & (cnt > 0)
+        a[new] = acc[new] / cnt[new]
+        cov |= new
+    a[~cov] = 1.0
+    return a
+
+
+def _ao_by_group(objs, groups, px, samples, log):
+    """Occlusion for a model whose pieces an engine shows in different combinations (a body, two armours, two hats ...). groups: [(own, others)]: the texels of the
+    objects `own` are occluded by `own` and `others` and by nothing else. So a bare head does not keep the shade of a hat it may not be wearing, and two hats that
+    occupy the same place do not black each other out. Every pass bakes only its own texels (margin 0); the result is composed and its gutters filled."""
+    occ = np.ones((px, px), dtype=np.float32)
+    cov = np.zeros((px, px), dtype=bool)
+    seen = set()
+    for k, (own, others) in enumerate(groups):
+        assert not (set(own) & set(others)), "a piece cannot occlude itself from outside"
+        assert not (set(own) & seen), "a piece is in two groups"
+        seen |= set(own)
+        sub = _join_copies(own, f"_ao_{k}")
+        for o in others:
+            o.hide_render = False
+        a = _bake_pass(sub, "AO", px, f"_ao_{k}", False, samples, margin=0)
+        m = _bake_pass(sub, "MASK", px, f"_aom_{k}", False, 1, margin=0)
+        for o in others:
+            o.hide_render = True
+        w = _px(m)[..., 0] > 0.5
+        occ[w] = np.clip(_px(a)[..., 0], 0, 1)[w]
+        cov |= w
+        bpy.data.images.remove(a)
+        bpy.data.images.remove(m)
+        bpy.data.objects.remove(sub, do_unlink=True)
+        log(f"  occlusion {k + 1}/{len(groups)}: {', '.join(o.name for o in own)[:70]} ({float(w.mean()) * 100:.1f}% of the atlas)")
+    assert seen == set(objs), "ao_groups must cover every object exactly once"
+    return _dilate(occ, cov)
+
+
+def bake_atlas(objs, out_dir, name, px=2048, quality=1.0, log=print, ao_samples=None, ao_blur=False, ao_groups=None, ao_alone=False):
     sc = bpy.context.scene
     sc.render.engine = "CYCLES"
     sc.cycles.device = "CPU"
@@ -203,12 +286,28 @@ def bake_atlas(objs, out_dir, name, px=2048, quality=1.0, log=print, ao_samples=
     adaptive = sc.cycles.use_adaptive_sampling
     if ao_samples:
         sc.cycles.use_adaptive_sampling = False
-    ao = _bake_pass(tmp, "AO", px, "_ao", False, ao_samples or int(40 * quality))
+    # ao_alone: the source objects are hidden while the joined copy is baked. They lie exactly ON the copy, and a ray leaving a surface that has a second surface in
+    # the same place hits it about half the time: every open surface came out half occluded and grainy however many samples were spent (found on the archer's face).
+    # ao_groups (see _ao_by_group): occlusion per piece of kit instead of one pass over everything.
+    vis = [(o, o.hide_render) for o in objs]
+    if ao_alone or ao_groups:
+        for o in objs:
+            o.hide_render = True
+    occ_groups = None
+    if ao_groups:
+        tmp.hide_render = True
+        occ_groups = _ao_by_group(objs, ao_groups, px, ao_samples or int(40 * quality), log)
+        tmp.hide_render = False
+        ao = None
+    else:
+        ao = _bake_pass(tmp, "AO", px, "_ao", False, ao_samples or int(40 * quality))
     sc.cycles.use_adaptive_sampling = adaptive
+    for o, h in vis:
+        o.hide_render = h
     team = _bake_pass(tmp, "TEAM", px, "_team", False, 4)
     log("  rough / metal / ao baked")
     orm = np.zeros((px, px, 4), dtype=np.float32)
-    occ = np.clip(_px(ao)[..., 0], 0, 1)
+    occ = occ_groups if occ_groups is not None else np.clip(_px(ao)[..., 0], 0, 1)
     if ao_blur:
         k = (1.0, 4.0, 6.0, 4.0, 1.0)
         occ = sum(np.roll(occ, i - 2, axis=0) * k[i] for i in range(5)) / 16.0
@@ -245,7 +344,8 @@ def bake_atlas(objs, out_dir, name, px=2048, quality=1.0, log=print, ao_samples=
     log(f"  team mask coverage {float((m > 0.5).mean()) * 100:.1f}% of the atlas")
     bpy.data.images.remove(team_img)
     for img in (rgh, met, ao, team):
-        bpy.data.images.remove(img)
+        if img is not None:
+            bpy.data.images.remove(img)
     bpy.data.objects.remove(tmp, do_unlink=True)
     sc.world = None
     bpy.data.worlds.remove(world)

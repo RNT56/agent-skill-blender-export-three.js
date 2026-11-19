@@ -73,9 +73,9 @@ def atlas_uv(objs, margin=0.0016):
     return tmp
 
 
-def bake_atlas(objs, out_dir, name, px=2048, quality=1.0, log=print):
+def bake_atlas(objs, out_dir, name, px=2048, quality=1.0, log=print, ao_groups=None):
     SBk.atlas_uv = atlas_uv                                   # the samurai baker calls its module-level atlas_uv: give it the weighted one for this run
-    return SBk.bake_atlas(objs, out_dir, name, px=px, quality=quality, log=log, ao_samples=int(192 * quality), ao_blur=True)       # bare skin under a hat brim shows AO grain that armour hides
+    return SBk.bake_atlas(objs, out_dir, name, px=px, quality=quality, log=log, ao_samples=int(192 * quality), ao_blur=True, ao_groups=ao_groups, ao_alone=True)       # bare skin under a hat brim shows AO grain that armour hides
 
 
 assign_baked = SBk.assign_baked

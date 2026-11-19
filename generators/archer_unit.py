@@ -1,6 +1,6 @@
 """Light archer generator (run inside Blender):  blender -b --factory-startup -P generators/archer_unit.py -- [options]
 
-Builds the A-pose rest model (body, clothes, war hat, belly wrap, quiver; the yumi, the nocked arrow and the back banner as their own skinned nodes), the 59-bone
+Builds the A-pose rest model (body, clothes, belly wrap, quiver; the war hat, the yumi, the nocked arrow and the back banner as their own skinned nodes), the 59-bone
 armature and skin weights, then optionally bakes the one-atlas PBR set, makes the LODs and bakes the clips:
   --bake out/archer_tex --px 2048 --quality 1.0   --finalize 1 [--lods 7600,2400]   --save fixtures/archer_unit.blend
   --pose <clip>@<seconds>   --render out/_archer --views front,side,...   (QA: LOOK at the sheets)
@@ -30,13 +30,16 @@ def main():
     from samurai import qa
     m = build.build_model()
     arm = m["arm"]
-    nodes = [m[k] for k in ("body", "Yumi", "Yumi_Low", "Arrow_Nocked", "Sashimono")]
+    nodes = [m[k] for k in ("body", "Helmet", "Yumi", "Yumi_Low", "Arrow_Nocked", "Sashimono")]
     if arg("--bake") is not None:
         from samurai import emblems
         from archer import bake, cloth, consts as K
         import json
         tex_dir = os.path.join(ROOT, arg("--bake"))
-        maps = bake.bake_atlas(nodes, tex_dir, "archer", px=int(arg("--px", 2048)), quality=float(arg("--quality", 1.0)), log=print)
+        # occlusion per piece: the body is not shaded by a hat he may not be wearing, and the two bows (full and low, in the same place) do not shade each other
+        b = m["body"]
+        groups = [([b], []), ([m["Helmet"]], [b]), ([m["Yumi"]], [b]), ([m["Yumi_Low"]], [b]), ([m["Arrow_Nocked"]], [b, m["Yumi"]]), ([m["Sashimono"]], [b])]
+        maps = bake.bake_atlas(nodes, tex_dir, "archer", px=int(arg("--px", 2048)), quality=float(arg("--quality", 1.0)), log=print, ao_groups=groups)
         bake.assign_baked(nodes, maps, "archer")
         emblems.write(tex_dir, "archer")                                   # the same eight crests; the region is THIS unit's banner cloth
         path = os.path.join(tex_dir, "archer_emblems.json")
@@ -60,9 +63,11 @@ def main():
             game.objects.link(o)
         body = m["body"]
         body.name = body.data.name = "Archer_LOD0"
-        lod_tris = [int(x) for x in arg("--lods", "7600,2400").split(",")]
+        # the hat is its own node at LOD0 and LOD1; far away it is in the mesh (Archer_LOD2), with a second far mesh for a man who has none (Archer_Far_Bare)
+        lod_tris = [int(x) for x in arg("--lods", "6800,2400").split(",")]
         finalize.lod_copy(body, "Archer_LOD1", lod_tris[0], arm, game, pre=(m["Sashimono"],), post=(m["Yumi"],))
-        finalize.lod_copy(body, "Archer_LOD2", lod_tris[1], arm, game, pre=(m["Sashimono"],), post=(m["Yumi_Low"],))
+        finalize.lod_copy(body, "Archer_LOD2", lod_tris[1], arm, game, pre=(m["Sashimono"], m["Helmet"]), post=(m["Yumi_Low"],))
+        finalize.lod_copy(body, "Archer_Far_Bare", lod_tris[1], arm, game, pre=(m["Sashimono"],), post=(m["Yumi_Low"],))
         bpy.data.objects.remove(m["Yumi_Low"], do_unlink=True)          # it lives on inside LOD2 only
         bpy.context.view_layer.update()
         for o in game.objects:

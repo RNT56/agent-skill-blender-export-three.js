@@ -3,6 +3,7 @@ combat clips are keyed poses of the SWORD and stance, blended with Catmull-Rom a
 Stride speeds are recorded in `meta` (m/s at the authored playback rate) so the game can match playback to movement speed."""
 import math
 
+from . import gait
 from mathutils import Vector
 
 from . import katana as K
@@ -92,7 +93,7 @@ LHAND_SAYA = dict(pos=(0.215, -0.105, 1.095), dir=(0.10, -0.75, -0.65), hint=(-0
 
 
 def idle(t):
-    T = 3.0
+    T = 8.0                         # a breath every 4 s, the weight shifts once in 8 (the first version breathed 40 times a minute)
     ph = TAU * t / T
     P = dict(
         hips_pos=V(0.010 * math.sin(ph), 0.0, -0.014 + 0.004 * math.sin(ph * 2)),
@@ -106,60 +107,46 @@ def idle(t):
     return fix(P)
 
 
-def locomotion(t, T, sweep, duty, lift, bob, lean, swing, sink, spacing=0.095, kick=0.0, arm_bend=0.0, sword_hand=False):
-    """Planted-foot cycle. Forward = -Y. A foot is in stance for `duty` of the cycle (sweeping back relative to the hips)."""
-    ph = (t % T) / T
-    feet = {}
-    for side, off in (("L", 0.0), ("R", 0.5)):
-        u = (ph + off) % 1.0
-        sx = 1.0 if side == "L" else -1.0
-        if u < duty:
-            s = u / duty
-            y = lerp(-sweep, sweep, s)
-            z = AZ + 0.045 * smooth((s - 0.72) / 0.28)
-            pitch = lerp(-12.0, 0.0, smooth(s / 0.25)) + 30.0 * smooth((s - 0.75) / 0.25)
-        else:
-            s = (u - duty) / (1.0 - duty)
-            e = smooth(s)
-            y = lerp(sweep + kick, -sweep, e)
-            z = AZ + 0.045 * (1 - smooth(s / 0.5)) + lift * math.sin(math.pi * min(s * 1.08, 1.0)) ** 0.9
-            pitch = lerp(30.0, -12.0, smooth(s))
-        feet[side] = dict(pos=V(sx * spacing, y, z), yaw=sx * 4.0, pitch=pitch, toe=-0.5 * pitch if pitch > 0 else 0.0)
-    ph2 = TAU * ph
-    stance = TAU * (ph - 0.5 * duty * 0.9)
-    hz = -sink + bob * math.cos(2 * ph2 - 2 * TAU * 0.5 * duty * 0.9)
+def locomotion(t, G, lean, swing, arm_bend=0.0, sword_hand=False):
+    """Planted-foot cycle (gait.cycle: G = dict(T, ahead, behind, duty, lift, bob, sink, ...)). The left hand steadies the scabbard; the right arm swings."""
+    feet, hips, ph2 = gait.cycle(t, **G)
+    tw = math.sin(ph2 + 0.2)
     P = dict(
-        hips_pos=V(0.020 * math.cos(ph2 - TAU * 0.5 * duty * 0.9 * 0.0), 0.0, hz),
-        hips_rot=(lean * 0.4, 0.0, 7.0 * math.sin(ph2 + 0.2)),
-        spine=(lean * 0.8, -9.0 * math.sin(ph2 + 0.2), 2.5 * math.sin(ph2)),
-        neck=(-lean * 0.6, 4.0 * math.sin(ph2 + 0.2), 0.0),
+        hips_pos=V(hips.x, 0.0, hips.z),
+        hips_rot=(lean * 0.4, 0.0, 7.0 * tw),
+        spine=(lean * 0.8, -9.0 * tw, 2.5 * math.sin(ph2)),
+        neck=(-lean * 0.6, 4.0 * tw, 0.0),
         footL=feet["L"], footR=feet["R"],
         handL=LHAND_SAYA, curl_L=0.5, curl_R=0.30,
     )
     # right arm swings opposite to the right leg; hand targets are chest/hips-relative
-    sw = swing * math.sin(ph2 + 0.2)
+    sw = swing * tw
     P["handR"] = dict(pos=(-0.285 - 0.02 * arm_bend, -0.02 - sw, 0.93 + 0.15 * arm_bend), pole=(-0.5, 0.6, -0.5))
     if sword_hand:                      # katana carried in the right hand beside the hip, point forward and up; the left arm pumps
-        P["sword"] = dict(O=V(-0.30, -0.20 - 0.03 * math.sin(ph2 + 0.2), 1.02 + hz), A=V(-0.22, -0.60, 0.32), E=V(0, 0, -1), one_hand=1.0)
+        P["sword"] = dict(O=V(-0.30, -0.20 - 0.03 * tw, 1.02 + hips.z), A=V(-0.22, -0.60, 0.32), E=V(0, 0, -1), one_hand=1.0)
         P["handL"] = dict(pos=(0.285 + 0.02 * arm_bend, -0.02 + sw, 0.93 + 0.15 * arm_bend), pole=(0.5, 0.6, -0.5))
         P["curl_R"] = 0.9
         P["curl_L"] = 0.25
     return fix(P)
 
 
+# a march of 120 steps a minute at 1.2 m/s; a run of 171 at the samurai's 3.7 m/s (sim/types.js): the game plays a clip at measured speed / stride speed
+WALK_V, RUN_V = 1.20, 3.70
+WALK_G = dict(T=1.00, ahead=0.300, behind=0.444, duty=gait.duty_for(WALK_V, 1.00, 0.300, 0.444), lift=0.080, bob=0.020, sink=0.045, rise=0.070)
+RUN_G = dict(T=0.70, ahead=0.260, behind=0.470, duty=gait.duty_for(RUN_V, 0.70, 0.260, 0.470), lift=0.190, bob=0.045, sink=0.080, rise=0.110, spacing=0.085, run=True, toe=48.0)
+
+
 def walk(t):
-    return locomotion(t, 0.92, 0.30, 0.60, 0.085, 0.020, 3.0, 0.20, 0.030)
+    return locomotion(t, WALK_G, 3.0, 0.20)
 
 
 def run(t):
-    return locomotion(t, 0.62, 0.33, 0.34, 0.17, 0.045, 8.0, 0.30, 0.06, spacing=0.085, kick=0.24, arm_bend=1.0)
+    return locomotion(t, RUN_G, 9.0, 0.30, arm_bend=1.0)
 
 
 def run_drawn(t):
-    return locomotion(t, 0.62, 0.33, 0.34, 0.17, 0.045, 8.0, 0.30, 0.06, spacing=0.085, kick=0.24, arm_bend=1.0, sword_hand=True)
+    return locomotion(t, RUN_G, 9.0, 0.30, arm_bend=1.0, sword_hand=True)
 
-
-# ------------------------------------------------------------------------------------------------------------- combat
 E_DOWN = V((0, 0, -1))
 E_UP = V((0, 0, 1))
 
@@ -180,7 +167,7 @@ CHUDAN = S((0.0, -0.17, 1.08), (0.0, -0.96, 0.28), E_DOWN)
 
 
 def combat_idle(t):
-    T = 2.4
+    T = 4.0                         # on guard: a breath every 2 s
     ph = TAU * t / T
     sw = S((0.004 * math.sin(ph), -0.17 + 0.006 * math.sin(ph * 2), 1.08 + 0.008 * math.sin(ph * 2 + 1.0)), (0.0, -0.96, 0.28 + 0.02 * math.sin(ph * 2)), E_DOWN)
     P = stance(sw, hips=(0.006 * math.sin(ph), -0.04, -0.075 + 0.006 * math.sin(ph * 2)), spine=(4 + 0.8 * math.sin(ph * 2), 0, 6))
@@ -298,13 +285,14 @@ def hit(t):
 
 
 def death(t):
-    T = 1.6
+    T = 1.25                        # real time (the game no longer speeds it up): the blow, the knees go, the ground at 1.0 s, a settle
     base = stance(CHUDAN)
     keys = [
         (0.00, base),
-        (0.20, stance(S((0.0, -0.02, 1.06), (0.0, -0.80, 0.55), E_DOWN), hips=(0, 0.12, -0.08), hrot=(-6, 0, 10), spine=(-16, 10, -4), neck=(-14, 0, 0), fl=(0.13, 0.22), fr=(-0.11, -0.10), curl=0.6)),
-        (0.55, stance(S((0.05, 0.08, 0.96), (0.4, -0.40, 0.80), E_DOWN), hips=(0, 0.22, -0.45), hrot=(-22, 0, 8), spine=(-20, 8, 0), neck=(-16, 0, 0), fl=(0.14, 0.20), fr=(-0.12, -0.02), curl=0.3)),
-        (1.00, stance(S((0.10, 0.20, 0.30), (0.5, -0.30, 0.25), E_DOWN), hips=(0, 0.30, -0.78), hrot=(-70, 0, 6), spine=(-14, 4, 0), neck=(-10, 0, 0), fl=(0.16, 0.30), fr=(-0.12, 0.06), curl=0.15)),
+        (0.19, stance(S((0.0, -0.02, 1.06), (0.0, -0.80, 0.55), E_DOWN), hips=(0, 0.12, -0.08), hrot=(-6, 0, 10), spine=(-16, 10, -4), neck=(-14, 0, 0), fl=(0.13, 0.22), fr=(-0.11, -0.10), curl=0.6)),
+        (0.50, stance(S((0.05, 0.08, 0.96), (0.4, -0.40, 0.80), E_DOWN), hips=(0, 0.22, -0.45), hrot=(-22, 0, 8), spine=(-20, 8, 0), neck=(-16, 0, 0), fl=(0.14, 0.20), fr=(-0.12, -0.02), curl=0.3)),
+        (0.80, stance(S((0.17, 0.21, 0.31), (0.5, -0.30, 0.25), E_DOWN), hips=(0, 0.30, -0.78), hrot=(-70, 0, 6), spine=(-14, 4, 0), neck=(-10, 0, 0), fl=(0.16, 0.30), fr=(-0.12, 0.06), curl=0.15)),
+        (1.00, stance(S((0.17, 0.21, 0.31), (0.5, -0.30, 0.25), E_DOWN), hips=(0, 0.31, -0.775), hrot=(-70, 0, 6), spine=(-11, 3, 0), neck=(-10, 0, 0), fl=(0.16, 0.30), fr=(-0.12, 0.06), curl=0.15)),
     ]
     ks = [(a * T, b) for a, b in keys]
 
@@ -351,18 +339,18 @@ def weapon_at(name, t):
 
 
 CLIPS = {
-    "idle": dict(fn=idle, duration=3.0, loop=True, weapon="sheathed"),
-    "walk": dict(fn=walk, duration=0.92, loop=True, weapon="sheathed", speed=2 * 0.30 / (0.60 * 0.92)),
-    "run": dict(fn=run, duration=0.62, loop=True, weapon="sheathed", speed=2 * 0.33 / (0.34 * 0.62)),
-    "run_drawn": dict(fn=run_drawn, duration=0.62, loop=True, weapon="drawn", speed=2 * 0.33 / (0.34 * 0.62)),
+    "idle": dict(fn=idle, duration=8.0, loop=True, weapon="sheathed"),
+    "walk": dict(fn=walk, duration=WALK_G["T"], loop=True, weapon="sheathed", speed=WALK_V),
+    "run": dict(fn=run, duration=RUN_G["T"], loop=True, weapon="sheathed", speed=RUN_V),
+    "run_drawn": dict(fn=run_drawn, duration=RUN_G["T"], loop=True, weapon="drawn", speed=RUN_V),
     "draw": dict(fn=draw, duration=0.8, loop=False, weapon="sheathed", weapon_end="drawn", events={"swap_weapon": 0.20}),
     "sheathe": dict(fn=sheathe, duration=0.8, loop=False, weapon="drawn", weapon_end="sheathed", events={"swap_weapon": 0.60}),
-    "combat_idle": dict(fn=combat_idle, duration=2.4, loop=True, weapon="drawn"),
+    "combat_idle": dict(fn=combat_idle, duration=4.0, loop=True, weapon="drawn"),
     "attack_overhead": dict(fn=attack_overhead, duration=1.0, loop=False, weapon="drawn", events={"impact": 0.62}),
     "attack_diagonal": dict(fn=attack_diagonal, duration=1.05, loop=False, weapon="drawn", events={"impact": 0.67}),
     "attack_horizontal": dict(fn=attack_horizontal, duration=1.0, loop=False, weapon="drawn", events={"impact": 0.60}),
     "attack_thrust": dict(fn=attack_thrust, duration=0.9, loop=False, weapon="drawn", events={"impact": 0.52}),
     "block": dict(fn=block, duration=0.8, loop=False, weapon="drawn"),
     "hit": dict(fn=hit, duration=0.6, loop=False, weapon="drawn"),
-    "death": dict(fn=death, duration=1.6, loop=False, weapon="drawn"),
+    "death": dict(fn=death, duration=1.25, loop=False, weapon="drawn"),
 }

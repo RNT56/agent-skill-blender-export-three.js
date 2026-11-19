@@ -95,9 +95,11 @@ def haraate(name="arc_haraate"):
     return b.finish(col, rough, 0.0, n, team=lace)
 
 
-def jingasa(name="arc_jingasa"):
+def jingasa(name="arc_jingasa", lacquer=None, gilt=True, mon=False):
     """War hat: black urushi over paper and hide, a brass rim, two fine gold rings with a painted band between them (the band is in the team mask),
-    vermilion lacquer on the underside. pat UV = (angle 0..1, radius m)."""
+    vermilion lacquer on the underside. pat UV = (angle 0..1, radius m).
+    lacquer = two colours instead of the black; gilt=False paints the rim and the rings in ochre instead of metal (a levy's rawhide hat);
+    mon=True adds a gilt house mark (a ring and its centre) on the front slope."""
     b = NB(name)
     uvv, u, v = b.uv()
     objv, oz = b.obj()
@@ -114,7 +116,8 @@ def jingasa(name="arc_jingasa"):
     line = b.math("MULTIPLY", line, top)
     n1 = b.noise(objv, 150.0, 5.0)
     brush = b.stretched(uvv, 2.0, 160.0, 30.0, 3.0)                                                   # the lacquer brush went round the hat
-    black = b.mix(b.smoothstep(0.35, 0.65, n1), (0.014, 0.013, 0.015, 1), (0.030, 0.027, 0.029, 1))
+    lq = lacquer or ((0.014, 0.013, 0.015, 1), (0.030, 0.027, 0.029, 1))
+    black = b.mix(b.smoothstep(0.35, 0.65, n1), lq[0], lq[1])
     black = b.mix(b.math("MULTIPLY", b.smoothstep(0.60, 0.92, brush), 0.25), black, (0.060, 0.050, 0.046, 1))
     red = b.mix(b.smoothstep(0.35, 0.65, n1), (0.230, 0.026, 0.014, 1), (0.330, 0.050, 0.024, 1))
     gold = b.mix(b.smoothstep(0.4, 0.7, b.noise(objv, 70.0, 4.0)), (0.72, 0.47, 0.12, 1), (0.52, 0.32, 0.07, 1))
@@ -123,7 +126,17 @@ def jingasa(name="arc_jingasa"):
     col = b.mix(under, black, red)
     col = b.mix(band, col, paint)
     metal = b.math("MAXIMUM", rim, line)
+    if mon:                                                                                           # the front of the hat is u = 0.75 (toward -y)
+        du = b.math("MULTIPLY", b.math("MULTIPLY", b.math("SUBTRACT", u, 0.75), TAU), v)
+        dm = b.math("POWER", b.math("ADD", b.math("POWER", du, 2.0), b.math("POWER", b.math("SUBTRACT", v, 0.0800), 2.0)), 0.5)
+        mark = b.math("MAXIMUM", b.math("SUBTRACT", 1.0, b.smoothstep(0.0030, 0.0046, b.math("ABSOLUTE", b.math("SUBTRACT", dm, 0.0200)))),
+                      b.math("SUBTRACT", 1.0, b.smoothstep(0.0070, 0.0086, dm)))
+        metal = b.math("MAXIMUM", metal, b.math("MULTIPLY", mark, top))
+    if not gilt:
+        gold = b.mix(b.smoothstep(0.4, 0.7, b.noise(objv, 70.0, 4.0)), (0.30, 0.19, 0.07, 1), (0.22, 0.13, 0.05, 1))
     col = b.mix(metal, col, gold)
+    if not gilt:
+        metal = b.math("MULTIPLY", metal, 0.0)
     col = b.mix(b.math("MULTIPLY", dust, b.math("SUBTRACT", 1.0, metal)), col, (0.085, 0.066, 0.046, 1))
     wear = b.edge_wear(0.0025, 1.2)
     col = b.mix(b.math("MULTIPLY", b.math("MULTIPLY", wear, b.math("SUBTRACT", 1.0, metal)), 0.6), col, (0.12, 0.10, 0.085, 1))

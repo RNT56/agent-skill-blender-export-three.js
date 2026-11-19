@@ -98,6 +98,54 @@ The only face that shows is the band between the visor and the mask (z 1.59-1.70
 Clip choice is a pure state machine (`src/view/samurai_logic.js`): the sim has no wind-up, so the swing clip starts at `impact - cd` and its impact frame lands exactly when the sim damages; a unit running at a target inside 14 m draws on the way;
 locomotion playback = measured speed / `speed_mps`; death is fitted into the sim's corpse time; far units get LOD2, no weapon nodes, no shadow, a lower animation rate. See that repo's `tests/view/samurai_logic.test.mjs`.
 
+## Pace: the shared gait, and a wind fix every engine copy needs (2026-11-19)
+- `generators/samurai/gait.py` `cycle(t, T, ahead, behind, duty, lift, bob, sink, ...)` is the planted-foot cycle of all three characters: an asymmetric stance (a foot lands
+  `ahead` of the hips and leaves `behind` them; ground speed = (ahead + behind) / (duty * T), `duty_for(speed, ...)` solves the duty), the heel coming up at push-off (`rise`), a
+  Hermite swing that follows through and is moving back when it lands, hips highest at mid-stance for a walk and lowest for a run (`run=True`). Author a locomotion clip AT the unit's
+  game speed with a natural cadence (a march about 120 steps a minute, a run about 170): an engine that matches playback to ground speed then plays it near 1.0.
+  Keep `ahead` inside the leg's reach at the strike (0.82 m leg, hips 0.08 m down: about 0.26 m) or the knee locks and the foot lands short.
+- Idles breathe every 4 s (every 2 s on guard); a fall is authored in real time.
+- **`ClothWindRig.restore(animated)`** (`viewer/cloth_wind.js`): pass the Set of bone names the current clip has a rotation track for (`clipChainBones(gltf.animations)[clip]`).
+  three.js's mixer writes a value only when it changed since its last write; restoring a chain bone to its REST orientation every frame therefore leaves it at rest on every frame its
+  key did not change. A chain whose rest pose is not how it hangs (a pennant on a spear) flickers. Bones the clip animates now go back to what the mixer last wrote.
+- `cloth.json` chains may carry `flutter` (amplitude x) and `flutter_hz` (frequency x): a small light cloth flutters wider and faster than a head band's tail.
+
+## A third character: the ashigaru (2026-11-19)
+`generators/ashigaru_unit.py` (kit in `generators/ashigaru/`) builds one spearman who can be dressed two ways from one code base: the levy (rawhide hat, a laced
+belly guard, bare forearms) and the man in lent armour (iron hat with a neck cloth, a cuirass of riveted lames, tassets, splint sleeves and greaves, a back banner).
+It was first built as two tier models (`--tier 1|2`, two GLBs); it is ONE model with its gear as nodes now: the next section. Spec `specs/ashigaru_unit_01.json`,
+fixture `fixtures/ashigaru_unit.blend`, checks `tests/test_ashigaru_golden.py`. What it adds to the pattern:
+- **Kit is parts lists, not forks.** `gear.haraate_set()`, `gear.okegawa_set()`, `gear.helmet_parts(kind)` pick parts; one material table (`ash_*`); the head, the
+  kosode, the lower legs and the hat's cords are the archer's functions, the tassets and the greaves the samurai's. A second armour costs about 150 lines.
+- **A two-handed polearm.** The spear is modelled in the right fist (shaft along the fist's axis, head on the thumb side) on a weapon bone that hangs on `hand.R` and
+  SLIDES along its own axis (a location key): the hand's place on the shaft changes between standing at ease (the butt on the ground), the march (on the shoulder) and
+  the guard. A clip says where the shaft is and how far apart the hands are; the solver puts both hands on that line (`anim.Solver.grip`). The weapon follows the hand
+  through every crossfade, which a root-parented weapon does not.
+- **Two weapons, one set of clips.** Both spears are nodes of the GLB (`Yari`, `Yari_Long`) on two weapon bones; the pike's bone slides 0.6 m further (`pike_up`)
+  wherever the spear is levelled, so it is held further up and its point ends 0.5 m beyond the short spear's instead of 1.1 m. An engine shows one node.
+- **A free ribbon.** The spear's pennant is a ribbon chain on the weapon bone with `body_z: 0` in `cloth.json` (nothing in front of or behind it to clamp against)
+  and `k_shape = 0` in the offline solve (it hangs by gravity whatever the shaft's direction).
+- `viewer/character.html?asset=ashigaru_unit_01&spear=long` shows the pike.
+
+## Gear as pieces: one body, a kit of nodes (2026-11-19)
+The ashigaru is ONE model now (`generators/ashigaru_unit.py`, no `--tier`): a body that is whole on its own and eight pieces of kit as separate skinned nodes on
+one 62-bone skeleton (`ashigaru/gear.py` `nodes()`: `Armour_HaraAte`, `Armour_Okegawa`, `Helmet_Jingasa`, `Helmet_Tetsu`, `Yari`, `Yari_Long`, `Side_Tanto`,
+`Sashimono`). An engine shows the pieces a unit has. The archer's war hat is the node `Helmet` the same way.
+- **Occlusion per piece**: `samurai/bake.py` `bake_atlas(..., ao_groups=[(own, others), ...])`. The texels of `own` are occluded by `own` and `others` and nothing
+  else: the body by itself, each piece by itself and the body. A bare head keeps no hat shade; two hats in one place do not black each other out; the archer's
+  full and low bow no longer shade each other. Passes bake only their own texels (margin 0); `_dilate` fills the gutters of the composed map.
+- **`ao_alone`** (on for archer and ashigaru): the source objects are hidden while the joined copy is baked. They lie exactly on it and half-occluded every open
+  surface: this was the real cause of the occlusion grain blamed on sample counts below.
+- **Levels**: `Ashigaru_LOD0/1` are the body; `Armour_<x>_Low` the armour at LOD1; `Ashigaru_Far_<armour>_<head>` (2 x 3, 2,400 triangles each) are body, armour
+  and hat in one mesh for the far level, where a crowd is. Far meshes with the iron hat are built without the head band's tails (`finalize._without_groups`).
+  A far mesh must not end in `_LOD<n>`: engines find body levels by that ending.
+- **The body is whole**: `archer/body.py` `hair_parts` has a round crown and a tied knot (it clears every hat's lining by 8 mm or more); `ashigaru/body.py`
+  has bare forearms under the lent armour's sleeves (`gear.kote_parts` goes over them).
+- **Viewer**: `?show=Armour_Okegawa,Helmet_Tetsu,Side_Tanto,Sashimono` dresses a model that has optional nodes (default: the first armour, the first helmet, the
+  side pieces); `__view.dress([...])` changes it without a reload; LOD2 shows the matching far mesh.
+- **QA sheet of one kit, no bake**: `ashigaru_unit.py -- --render out/_ash --kit okegawa,tetsu,long,tanto --views front,back,head,top,head_b`.
+- Golden tests: `tests/test_ashigaru_golden.py` (37 checks on `fixtures/ashigaru_unit.blend`), `tests/test_archer_golden.py` (31).
+
 ## Build id, occlusion grain, viewer hooks (2026-11-19)
 - `manifest.json` carries `build`: the first 12 hex digits of the SHA-1 of the exported GLB(s). An engine should fetch the manifest uncached and append the id to every
   URL of the asset (GLB, team mask, emblem sheet, clips, cloth): a rebuilt GLB with last build's team mask from the browser cache paints team colour on the wrong texels.

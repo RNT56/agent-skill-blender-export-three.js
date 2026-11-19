@@ -7,6 +7,7 @@ import bpy
 from . import body, bow, gear, rig, shaders, skin
 
 GROUPS = (("banner_", "Sashimono"), ("bow_", "Yumi"), ("lowbow_", "Yumi_Low"), ("arrow_", "Arrow_Nocked"))
+HELMET = ("armor_jingasa", "armor_jingasa_knob", "cloth_jingasa_pad", "cord_jingasa")     # the war hat, its pad and chin cords: the node Helmet (an engine may leave it off)
 SCENE = "Archer"
 
 
@@ -18,7 +19,7 @@ def _own_scene():
         bpy.data.objects.remove(o, do_unlink=True)
     for c in list(sc.collection.children_recursive):
         bpy.data.collections.remove(c)
-    own = ("Archer_", "Yumi", "Arrow_", "Sashimono", "lowbow_", "body_", "cloth_", "armor_", "cord_", "gear_", "glove_", "banner_", "bow_", "arrow_", "straw_", "_tmp")
+    own = ("Archer_", "Helmet", "Yumi", "Arrow_", "Sashimono", "lowbow_", "body_", "cloth_", "armor_", "cord_", "gear_", "glove_", "banner_", "bow_", "arrow_", "straw_", "_tmp")
     for blocks, pre in ((bpy.data.meshes, own), (bpy.data.armatures, ("ArcherRig",)), (bpy.data.materials, ("arc_",)), (bpy.data.actions, ("arc:",))):
         for d in list(blocks):                      # only this generator's own orphans: nothing else in the session is touched
             if d.users == 0 and d.name.startswith(pre):
@@ -28,7 +29,7 @@ def _own_scene():
 
 
 def build_model(mat_fn=None, coll_name="archer_LOD0", live=False):
-    """Returns dict(arm, body, Yumi, Yumi_Low, Arrow_Nocked, Sashimono, parts)."""
+    """Returns dict(arm, body, Helmet, Yumi, Yumi_Low, Arrow_Nocked, Sashimono, parts). The body is whole without the hat (hair over the crown, the head band)."""
     mat_fn = mat_fn or shaders.procedural
     if live:
         sc = _own_scene()
@@ -49,6 +50,9 @@ def build_model(mat_fn=None, coll_name="archer_LOD0", live=False):
         objs.append(ob)
     wmap, body_objs = {}, []
     for ob in objs:
+        if ob.name in HELMET:
+            wmap.setdefault("Helmet", []).append(ob)
+            continue
         for prefix, target in GROUPS:
             if ob.name.startswith(prefix):
                 wmap.setdefault(target, []).append(ob)

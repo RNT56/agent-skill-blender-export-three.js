@@ -31,7 +31,7 @@ import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { loadTeamAssets, teamMaterial } from './team_emblem.js';
-import { ClothWindRig, relativeAir, gustAt, WIND_MS } from './cloth_wind.js';
+import { ClothWindRig, relativeAir, gustAt, WIND_MS, clipChainBones } from './cloth_wind.js';
 
 const params = new URLSearchParams(location.search);
 const ASSET = params.get('asset') || 'samurai_unit_01';
@@ -78,9 +78,34 @@ window.__state = state;
 window.__view = { camera, controls, renderer, scene, three: THREE };      // + frame(pos, target, fov): one synchronous render for captures when no animation frames run (a hidden tab)
 let mixer, actions = {}, meta = {}, lods = {}, weapons = {}, root, report = {};
 
+// A model may carry its kit as optional nodes: Armour_<x> (+ Armour_<x>_Low for LOD1), Helmet / Helmet_<x>, Side_<x>, and ready-made far meshes
+// <Unit>_Far_[<armour>_]<head | Bare> that replace the body from LOD2. ?show=Armour_Okegawa,Helmet_Tetsu,Side_Tanto,Sashimono picks what he wears
+// (default: the first armour, the first helmet, every side piece); an engine picks per unit.
+const opt = {}, isOpt = n => /^(Armour_|Helmet|Side_)/.test(n) || n.includes('_Far_');
+let SHOW = null;
+function dress() {
+  const n = state.lod, names = Object.keys(opt);
+  if (!names.length) return null;
+  if (!SHOW) {
+    const q = params.get('show');
+    SHOW = new Set(q !== null ? q.split(',').filter(Boolean) : [names.find(k => k.startsWith('Armour_') && !k.endsWith('_Low')), names.find(k => k.startsWith('Helmet')), ...names.filter(k => k.startsWith('Side_'))].filter(Boolean));
+  }
+  const armour = [...SHOW].find(k => k.startsWith('Armour_')), helmet = [...SHOW].find(k => k.startsWith('Helmet'));
+  const a = armour ? armour.slice(7) + '_' : '', h = !helmet ? 'Bare' : helmet.includes('_') ? helmet.slice(helmet.indexOf('_') + 1) : null;
+  const far = n >= 2 && h !== null ? names.find(k => k.includes('_Far_') && k.endsWith('_' + a + h)) ?? null : null;
+  for (const k of names) {
+    const o = opt[k];
+    if (k.includes('_Far_')) o.visible = k === far;
+    else if (k.endsWith('_Low')) o.visible = n === 1 && SHOW.has(k.slice(0, -4));
+    else o.visible = SHOW.has(k) && !far && (n === 0 || (n === 1 && !opt[k + '_Low'] && !k.startsWith('Side_')));       // from LOD2 a hat is in the mesh: the far one, or the body's own
+  }
+  if (weapons.banner && names.some(k => k.startsWith('Armour_'))) weapons.banner.visible = n === 0 && SHOW.has('Sashimono');
+  return far;
+}
 function setLod(n) {
   state.lod = n;
-  for (const [k, m] of Object.entries(lods)) m.visible = Number(k) === n;
+  const far = dress();
+  for (const [k, m] of Object.entries(lods)) m.visible = Number(k) === n && !far;
   for (const b of document.querySelectorAll('#lods button')) b.classList.toggle('on', Number(b.dataset.lod) === n);
 }
 function setClip(name, t) {
@@ -125,8 +150,15 @@ root.traverse(o => {
     if (o.name === 'Katana_Drawn') weapons.drawn = o;
     if (o.name === 'Katana_Sheathed') weapons.sheathed = o;
     if (o.name === 'Arrow_Nocked') weapons.arrow = o;      // an archer's nocked arrow: shown between a clip's `arrow` and `release` events, or while its `weapon` is 'arrow'
+    if (o.name === 'Yari') weapons.yari = o;                // a spearman carries both spears as nodes: ?spear=long shows the pike (the game picks by the unit's kit)
+    if (o.name === 'Yari_Long') weapons.nagae = o;
+    if (o.name === 'Sashimono') weapons.banner = o;
+    if (isOpt(o.name)) opt[o.name] = o;                     // a piece of kit, or a far mesh that has one built in (dress())
   }
 });
+{ const long = params.get('spear') === 'long'; if (weapons.yari) weapons.yari.visible = !long; if (weapons.nagae) weapons.nagae.visible = long; }
+dress();
+window.__view.dress = list => { SHOW = new Set(list); setLod(state.lod); return Object.keys(opt).filter(k => opt[k].visible); };       // change the kit without a reload
 // team colour + faction emblem: ?team=0|1 (default 0) and optionally ?emblem=<cell>; the asset's own material is replaced by the team copy (the contract in team_emblem.js)
 const TEAM_TINT = [new THREE.Color(0.80, 0.09, 0.11), new THREE.Color(0.10, 0.34, 0.92)], TEAM_EMBLEM = [1, 3];
 let teamAssets = null;
@@ -137,6 +169,7 @@ if (teamAssets) {
     emblem: +(params.get('emblem') || TEAM_EMBLEM[team] || 0) });
   root.traverse(o => { if (o.isMesh) o.material = tm; });
 }
+const clothTracks = clipChainBones(gltf.animations);
 mixer = new THREE.AnimationMixer(root);
 for (const c of gltf.animations) actions[c.name] = mixer.clipAction(c);
 
@@ -148,7 +181,7 @@ const WIND = { ms: +(params.get('wind') ?? 3.5), deg: +(params.get('winddir') ??
 window.__wind = WIND;
 let simT = 0;
 function stepMixer(dt) {
-  if (clothWind) clothWind.restore();                    // chain bones the clip does not animate must not keep last frame's wind rotation
+  if (clothWind) clothWind.restore(clothTracks[state.clip]);      // last frame's wind comes off (a bone this clip does not animate goes to rest)
   mixer.update(dt);
   showArrow();
   if (!clothWind) return;
@@ -162,7 +195,8 @@ for (const name of Object.keys(actions)) {
   const b = document.createElement('button'); b.textContent = name; b.onclick = () => setClip(name); cb.appendChild(b);
 }
 const lb = document.getElementById('lods');
-for (const n of Object.keys(lods)) {
+const lodButtons = Object.keys(lods).map(Number); if (!lods[2] && Object.keys(opt).some(k => k.includes('_Far_'))) lodButtons.push(2);       // a far mesh stands in for the missing body LOD
+for (const n of lodButtons) {
   const b = document.createElement('button'); b.textContent = 'LOD' + n; b.dataset.lod = n; b.onclick = () => setLod(+n); lb.appendChild(b);
 }
 setLod(0);

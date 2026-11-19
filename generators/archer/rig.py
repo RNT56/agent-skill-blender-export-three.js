@@ -31,7 +31,7 @@ QUIVER_LEN = 0.40
 
 # ---------------------------------------------------------------------------------------------------- cloth chains
 TAILS = {"a": (0.015, 0.26), "b": (-0.013, 0.20)}          # x of the hachimaki tail at the knot, length
-TAIL_Y, TAIL_Z = 0.098, 1.716
+TAIL_Y, TAIL_Z = 0.098, 1.700
 
 
 def tail_joints(key):

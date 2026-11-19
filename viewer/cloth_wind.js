@@ -41,6 +41,7 @@ export class ChainState {
     this.ph = (seed * 0.6180339887) % 1 * Math.PI * 2;
     this.max = (desc.max_deg ?? 60) * Math.PI / 180;
     this.gain = desc.gain ?? 1; this.omega = desc.omega ?? 8; this.zeta = desc.zeta ?? 0.4;
+    this.flut = desc.flutter ?? 1; this.flutHz = desc.flutter_hz ?? 1;           // a small light cloth (a spear's pennant) flutters wider and faster than a head band's tail
     this.frac = FRACTION[this.kind] || FRACTION.ribbon;
     this.speed = 0; this.s = 0;
   }
@@ -66,7 +67,7 @@ export class ChainState {
       let px = 0, pz = 0;
       if (sp > 1e-4) { const a = Math.min(this.max, 0.62) * s * this.gain; px = air.x / sp * a; pz = air.z / sp * a; }
       if ((this.desc.body_z ?? -1) > 0) pz = Math.min(pz, 0.012);                // `body_z: 1` in the descriptor: the body is in FRONT of the ribbon (tails that hang behind a head)
-      else pz = Math.max(pz, -0.012);                                             // 0.7 degrees: the baked tails already rest on the kusazuri, a tip 26 cm below its root moves 3 mm per 0.7 degrees
+      else if ((this.desc.body_z ?? -1) < 0) pz = Math.max(pz, -0.012);            // (`body_z: 0`: nothing to rest against: a spear's pennant swings both ways) 0.7 degrees: the baked tails already rest on the kusazuri, a tip 26 cm below its root moves 3 mm per 0.7 degrees
       total = Math.hypot(px, pz);
       axis = total > 1e-6 ? [-pz / total, 0, px / total] : [1, 0, 0];
       flutAmp = 0.12 * s * this.gain; flutHz = clamp(0.8 + 0.35 * sp, 0.8, 3.5); axis2 = [0, 1, 0]; twAmp = 0.5;     // the twist about its own length
@@ -76,6 +77,7 @@ export class ChainState {
       total = Math.hypot(px, pz);
       axis = total > 1e-6 ? [pz / total, 0, -px / total] : [1, 0, 0];
     }
+    flutAmp *= this.flut; flutHz *= this.flutHz;
     const omega = Math.PI * 2 * flutHz, h = Math.min(dt, 0.1), sub = h > 0.02 ? 4 : h > 0.008 ? 2 : 1, hs = h / sub;
     for (let q = 0; q < sub; q++) {
       const tt = t - h + hs * (q + 1);
@@ -109,7 +111,7 @@ export class ClothWindRig {
       const objs = d.segments.map(sg => bones[sg.bone]);
       if (objs.some(b => !b)) continue;                                            // an asset without that chain: skip it, never throw
       const anc = []; for (let p = objs[0].parent; p && p !== root; p = p.parent) anc.unshift(p);      // from the top bone down to the chain's parent
-      this.chains.push({ desc: d, state: new ChainState(d, seed), bones: objs, anc, rest: objs.map(b => b.quaternion.clone()) });      // the rest orientation: the exporter drops constant tracks, so an unanimated bone is never rewritten by the mixer
+      this.chains.push({ desc: d, state: new ChainState(d, seed), bones: objs, anc, rest: objs.map(b => b.quaternion.clone()), base: objs.map(b => b.quaternion.clone()), names: d.segments.map(sg => sg.bone) });      // the rest orientation: the exporter drops constant tracks, so an unanimated bone is never rewritten by the mixer
     }
     this._qp = new THREE.Quaternion(); this._qd = new THREE.Quaternion(); this._qd2 = new THREE.Quaternion(); this._qi = new THREE.Quaternion();
     this._ax = new THREE.Vector3(); this.active = this.chains.length > 0;
@@ -117,9 +119,15 @@ export class ClothWindRig {
 
   reset() { for (const c of this.chains) c.state.reset(); }
 
-  /** call BEFORE the mixer updates: puts the chain bones back to their rest orientation. A bone that the clip animates is overwritten by the mixer anyway; one that it does not (the dry-baked chains are
-   *  constant in many clips, and the exporter drops constant tracks) would otherwise keep last frame's wind rotation and accumulate it. */
-  restore() { for (const c of this.chains) for (let j = 0; j < c.bones.length; j++) c.bones[j].quaternion.copy(c.rest[j]); }
+  /** call BEFORE the mixer updates: takes last frame's wind off the chain bones.
+   *  @param animated a Set of the bone names the CURRENT clip has a rotation track for (clipChainBones below), or nothing.
+   *  A bone the clip animates goes back to what the mixer last wrote; a bone it does not goes back to its rest orientation (the exporter drops a track that never
+   *  leaves the rest pose). Both are needed because the mixer only writes a value that CHANGED since its last write: put a still-hanging pennant back to its rest
+   *  orientation (straight out from the shaft) and on every frame its key did not change it stays there - it flickers between hanging and sticking out.
+   *  Without `animated` every bone goes to rest (right for chains whose rest pose is how they hang: tails, a banner). */
+  restore(animated) {
+    for (const c of this.chains) for (let j = 0; j < c.bones.length; j++) c.bones[j].quaternion.copy(animated && animated.has(c.names[j]) ? c.base[j] : c.rest[j]);
+  }
 
   /** call AFTER the mixer wrote this frame's keys (and only on frames it did: the rotations are composed onto the animated quaternion; restore() before the mixer) */
   update(dt, t, air) {
@@ -129,6 +137,7 @@ export class ClothWindRig {
       qp.identity(); for (const a of c.anc) qp.multiply(a.quaternion);              // the parent bone's orientation in the rig's frame
       for (let j = 0; j < c.bones.length; j++) {
         const o = j * 8;
+        c.base[j].copy(c.bones[j].quaternion);                                          // what the clip says, before the wind: restore() puts it back
         qd.setFromAxisAngle(ax.set(rot[o], rot[o + 1], rot[o + 2]), rot[o + 3]);
         qd2.setFromAxisAngle(ax.set(rot[o + 4], rot[o + 5], rot[o + 6]), rot[o + 7]);   // secondary: a roll / twist, about the bone's own direction
         qd.multiply(qd2);
@@ -138,4 +147,14 @@ export class ClothWindRig {
       }
     }
   }
+}
+
+/** For restore(): per clip name, the Set of bone names the clip has a rotation track for. @param animations the glTF's AnimationClips */
+export function clipChainBones(animations) {
+  const out = {};
+  for (const clip of animations) {
+    const set = out[clip.name] = new Set();
+    for (const t of clip.tracks) { const k = t.name.lastIndexOf('.'); if (k > 0 && t.name.slice(k + 1) === 'quaternion') set.add(t.name.slice(0, k)); }
+  }
+  return out;
 }

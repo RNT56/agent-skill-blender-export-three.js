@@ -14,10 +14,11 @@ from .kitx import loop, mtube
 V = Vector
 
 # ------------------------------------------------------------------------------------------------------------- jingasa
-HAT_C = V((0.0, -0.020, 1.730))
+HAT_C = V((0.0, -0.020, 1.708))               # worn DOWN on the head: the front of the brim is at the brows (it used to perch 2 cm higher and made the head look tall)
 HAT_TILT = math.radians(7.0)                 # worn tipped forward: the brim shades the eyes
-HAT_PROF = ((0.006, 0.0890), (0.030, 0.0842), (0.070, 0.0664), (0.110, 0.0458), (0.150, 0.0242), (0.178, 0.0088), (0.1895, 0.0012), (0.1915, -0.0030),
-            (0.186, -0.0048), (0.150, 0.0152), (0.110, 0.0368), (0.070, 0.0574), (0.030, 0.0752), (0.006, 0.0800))
+_HAT_H = 0.92                                # a flatter crown
+HAT_PROF = tuple((r, h * _HAT_H) for r, h in ((0.006, 0.0890), (0.030, 0.0842), (0.070, 0.0664), (0.110, 0.0458), (0.150, 0.0242), (0.178, 0.0088), (0.1895, 0.0012), (0.1915, -0.0030),
+                                             (0.186, -0.0048), (0.150, 0.0152), (0.110, 0.0368), (0.070, 0.0574), (0.030, 0.0752), (0.006, 0.0800)))
 
 
 def hat_matrix():
@@ -34,8 +35,9 @@ def hat_parts():
     H.pop()
     F = Part("armor_jingasa_knob", "brass", bone="head", sharp=50)
     F.push(M)
-    F.cyl((0, 0, 0.0865), (0, 0, 0.0935), 0.0125, 0.0105, 10)
-    F.cyl((0, 0, 0.0935), (0, 0, 0.0990), 0.0060, 0.0045, 8)
+    z0 = HAT_PROF[0][1] - 0.0025
+    F.cyl((0, 0, z0), (0, 0, z0 + 0.0070), 0.0125, 0.0105, 10)
+    F.cyl((0, 0, z0 + 0.0070), (0, 0, z0 + 0.0125), 0.0060, 0.0045, 8)
     F.pop()
     # padded ring the hat sits on (seen from below the brim)
     L = Part("cloth_jingasa_pad", "juban", bone="head", sharp=60)
@@ -46,7 +48,7 @@ def hat_parts():
     C = Part("cord_jingasa", "cord", bone="head", sharp=70)
     for sx in (1, -1):
         pts = []
-        for z, a, off in ((1.752, -22.0, 0.006), (1.700, -27.0, 0.0050), (1.650, -33.0, 0.0048), (1.605, -44.0, 0.0090), (1.565, -60.0, 0.0065), (1.535, -78.0, 0.0060), (1.5215, -90.0, 0.0050)):
+        for z, a, off in ((1.734, -22.0, 0.006), (1.690, -27.0, 0.0050), (1.650, -33.0, 0.0048), (1.605, -44.0, 0.0090), (1.565, -60.0, 0.0065), (1.535, -78.0, 0.0060), (1.5215, -90.0, 0.0050)):
             x, y = head_xy(math.radians(a), z, off)
             pts.append(V((sx * x, y, z)))
         mtube(C, catmull(pts, 3), lambda t: (0.0034, 0.0034), 5, (True, True))
@@ -66,7 +68,7 @@ def hachimaki_parts():
         x, y = head_xy(a, v, 0.0068)
         return V((x, y, v))
 
-    B.strip(param_surf(fn, inside=SA.HEAD_AX), 24, 1.702, 1.732, nv=1, relief=0.0, thick=0.0042, groove=None, closed=True)
+    B.strip(param_surf(fn, inside=SA.HEAD_AX), 24, 1.686, 1.714, nv=1, relief=0.0, thick=0.0042, groove=None, closed=True)
     rx, ry, cy = face_radii(R.TAIL_Z)
     B.sphere((0.001, cy + ry + 0.0105, R.TAIL_Z), 0.0170, 0.0095, 0.0140, 8, 5)                                   # the knot at the back
     out = [B]

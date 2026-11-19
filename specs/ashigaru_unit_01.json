@@ -1,0 +1,94 @@
+{
+  "name": "ashigaru_unit_01",
+  "type": "character",
+  "recipe": "character",
+  "source_blend": "fixtures/ashigaru_unit.blend",
+  "preview": false,
+  "budgets": {
+    "max_tris": 56000,
+    "max_materials": 1,
+    "max_texture_px": 2048,
+    "max_file_mb": 12
+  },
+  "lod_budgets": {
+    "LOD0": 14000,
+    "LOD1": 5600
+  },
+  "rules": {
+    "origin_tolerance": 0.05
+  },
+  "recipe_cfg": {
+    "collection": "ashigaru_game"
+  },
+  "character": {
+    "max_bones": 64,
+    "max_influences": 4,
+    "clips": {
+      "idle": {
+        "loop": true
+      },
+      "walk": {
+        "loop": true
+      },
+      "run": {
+        "loop": true
+      },
+      "ready": {
+        "loop": false
+      },
+      "stand_down": {
+        "loop": false
+      },
+      "combat_idle": {
+        "loop": true
+      },
+      "run_ready": {
+        "loop": true
+      },
+      "thrust_high": {
+        "loop": false
+      },
+      "thrust_low": {
+        "loop": false
+      },
+      "hit": {
+        "loop": false
+      },
+      "death": {
+        "loop": false
+      }
+    },
+    "team_mask": "out/ashigaru_tex/ashigaru_team.png",
+    "cloth": {
+      "json": "out/ashigaru_tex/ashigaru_cloth.json"
+    },
+    "emblems": {
+      "png": "out/ashigaru_tex/ashigaru_emblems.png",
+      "json": "out/ashigaru_tex/ashigaru_emblems.json"
+    }
+  },
+  "glb_expect": {
+    "occlusion": [
+      "ashigaru_mat"
+    ],
+    "joints_max": 64,
+    "animations": [
+      "idle",
+      "walk",
+      "run",
+      "ready",
+      "stand_down",
+      "combat_idle",
+      "run_ready",
+      "thrust_high",
+      "thrust_low",
+      "hit",
+      "death"
+    ]
+  },
+  "export": {
+    "out_dir": "out",
+    "compress": true,
+    "png_fallback": false
+  }
+}
