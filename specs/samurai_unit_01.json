@@ -5,14 +5,14 @@
   "source_blend": "fixtures/samurai_unit.blend",
   "preview": false,
   "budgets": {
-    "max_tris": 36000,
+    "max_tris": 52000,
     "max_materials": 1,
     "max_texture_px": 2048,
     "max_file_mb": 12
   },
   "lod_budgets": {
-    "LOD0": 24000,
-    "LOD1": 8000,
+    "LOD0": 18000,
+    "LOD1": 4800,
     "LOD2": 2500
   },
   "rules": {
@@ -66,11 +66,25 @@
       },
       "sheathe": {
         "loop": false
+      },
+      "equip": {
+        "loop": false
+      },
+      "crouch_idle": {
+        "loop": true
+      },
+      "sneak": {
+        "loop": true
       }
     },
     "team_mask": "out/samurai_tex/samurai_team.png",
-    "emblems": {"png": "out/samurai_tex/samurai_emblems.png", "json": "out/samurai_tex/samurai_emblems.json"},
-    "cloth": {"json": "out/samurai_tex/samurai_cloth.json"}
+    "emblems": {
+      "png": "out/samurai_tex/samurai_emblems.png",
+      "json": "out/samurai_tex/samurai_emblems.json"
+    },
+    "cloth": {
+      "json": "out/samurai_tex/samurai_cloth.json"
+    }
   },
   "glb_expect": {
     "occlusion": [
@@ -91,7 +105,10 @@
       "death",
       "run_drawn",
       "draw",
-      "sheathe"
+      "sheathe",
+      "equip",
+      "crouch_idle",
+      "sneak"
     ]
   },
   "export": {

@@ -465,8 +465,18 @@ def menpo_parts():
     return parts
 
 
-def all_armour(table):
+def body_armour():
+    """the o-yoroi without its helmet: cuirass, skirt, thigh guards, greaves, sleeves, shoulder guards (the node Armour_Oyoroi)"""
     parts = []
-    for f in (do_parts, skirt_parts, haidate_parts, suneate_parts, kote_parts, sode_parts, kabuto_parts, menpo_parts):
+    for f in (do_parts, skirt_parts, haidate_parts, suneate_parts, kote_parts, sode_parts):
         parts += f()
     return parts
+
+
+def helmet():
+    """kabuto and menpo (the node Helmet): an engine may leave it off"""
+    return kabuto_parts() + menpo_parts()
+
+
+def all_armour(table):
+    return body_armour() + helmet()

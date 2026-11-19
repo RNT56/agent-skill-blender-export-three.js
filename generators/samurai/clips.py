@@ -338,7 +338,82 @@ def weapon_at(name, t):
     return start if sw is None or t < sw else end
 
 
+# ------------------------------------------------------------------------------------------------------------- taking up a piece of kit
+EQUIP_T, EQUIP_TAKE = 1.6, 0.85                 # an engine changes the piece he carries at EQUIP_TAKE: the moment the free hand closes on it
+RHAND_HANG = dict(pos=(-0.385, -0.060, 0.845), dir=(-0.30, -0.20, -0.93), hint=(0.9, 0.0, 0.4), pole=(-0.8, 0.6, -0.2))
+
+
+def _equip_pose(reach, lift):
+    """Standing at ease, the left hand on the scabbard. reach 0..1: he leans to the rack and the right hand goes out; lift 0..1: he brings the piece up to himself."""
+    lean = reach * (1.0 - lift)
+    h = RHAND_HANG
+    pos = V(h["pos"]).lerp(V((-0.205, -0.455, 0.960)), reach).lerp(V((-0.130, -0.230, 1.340)), lift)
+    d = V(h["dir"]).lerp(V((0.10, -0.95, -0.25)), reach).lerp(V((0.45, -0.35, 0.80)), lift).normalized()
+    return dict(hips_pos=V((0.0, -0.040 * lean, -0.014 - 0.045 * lean)), hips_rot=(0.0, 0.0, 7.0 * lean), spine=(1.2 + 15.0 * lean, 0.0, 6.0 * lean), neck=(5.0 * lean - 9.0 * lift, 0.0, 10.0 * lean),
+                footL=dict(pos=V((0.135, 0.03, AZ)), yaw=9.0), footR=dict(pos=V((-0.135, -0.02, AZ)), yaw=-9.0), handL=LHAND_SAYA,
+                handR=dict(pos=pos, dir=d, hint=h["hint"], pole=V(h["pole"]) + V((0.0, -0.45 * lift, 0.25 * lift))), curl_L=0.5, curl_R=0.22 + 0.60 * max(lift, reach * reach))
+
+
+def equip(t):
+    """At a rack: he reaches out with the sword hand, takes the piece (EQUIP_TAKE), lifts it to himself and stands at ease again."""
+    keys = [(0.0, _equip_pose(0.0, 0.0)), (0.42, _equip_pose(0.80, 0.0)), (EQUIP_TAKE, _equip_pose(1.0, 0.0)), (1.22, _equip_pose(1.0, 1.0)), (EQUIP_T, _equip_pose(0.0, 0.0))]
+    return fix(keyed(keys, min(t, EQUIP_T)))
+
+
+# ------------------------------------------------------------------------------------------------------------- hidden in the grass
+# The sim draws a crouched man 0.95 m tall, and a samurai may hide only out of his armour (robe, no helmet). He kneels as a swordsman does (tatehiza): the LEFT
+# knee on the ground, the right knee up, so the hilt at his left hip clears the raised thigh and he can rise and draw from it. The left hand holds the scabbard at its
+# mouth (koiguchi), the thumb on the guard; bent forward, the scabbard's end would rise behind him like a tail: the hand turns it back down (anim.Solver.saya), so
+# the sword lies back and low. The right hand rests on the right knee.
+def _koiguchi_hand(fingers=(-0.243, 0.0, -0.970), thumb=(-0.085, -0.965, 0.245)):
+    """The left hand on the scabbard's mouth, in weapon_hip's REST frame (it rides the scabbard): the palm on the outer side, the fingers round under it, the thumb
+    forward along it onto the guard."""
+    d, z = V(fingers).normalized(), V(thumb)
+    z = (z - d * z.dot(d)).normalized()
+    n = d.cross(z).normalized()                                     # the palm's normal (toward the scabbard)
+    g = K.HIP_ORIGIN + K.HIP_DIR.normalized() * (K.TSUBA_Y + 0.034)     # the grip centre, a thumb's width behind the guard
+    return dict(pos=g - d * 0.076 - n * 0.027, dir=d, hint=z, pole=V((0.80, 0.50, 0.30)), space="weapon_hip")
+
+
+LHAND_KOI = _koiguchi_hand()
+CR_DZ = -0.550                                                       # down on the left knee, sitting back toward the heel
+CR_FL = dict(pos=V((0.110, 0.248, 0.098)), yaw=6.0, pitch=142.0, toe=0.0, kpole=V((0.0, -0.45, -1.0)), instep=True)     # the left knee on the ground, the instep down
+CR_FR = dict(pos=V((-0.120, -0.300, AZ)), yaw=8.0, pitch=0.0, toe=0.0)                                                 # the right foot forward, the knee up
+CR_SAYA = (-22.0, 0.0, 4.0)                                          # the scabbard turned in the obi: its end down behind him (the hips are pitched 26 deg)
+CR_HANDR = dict(pos=V((-0.150, -0.360, 0.560)), dir=V((0.05, -0.55, -0.83)), hint=V((0.9, -0.2, 0.3)), pole=V((-0.6, 0.6, 0.2)), space="world")
+
+
+def crouch_pose(breath=0.0, sway=0.0):
+    hr = dict(CR_HANDR, pos=V(CR_HANDR["pos"]) + V((0.0, 0.0, 0.003 * breath)))
+    # he breathes with his chest, not his hips: the legs are still and the knee on the ground does not slide (a 4 mm hip bob moved it 4.6 mm)
+    return fix(dict(hips_pos=V((0.0, 0.100, CR_DZ)), hips_rot=(26.0, 0.0, 6.0), spine=(40.0 + 1.8 * breath, 0.0, -2.0), neck=(-22.0, 0.0, 4.0 * sway),
+                    footL=dict(CR_FL), footR=dict(CR_FR), saya=CR_SAYA, handL=dict(LHAND_KOI), handR=hr, curl_L=0.75, curl_R=0.35))
+
+
+def crouch_idle(t):
+    ph = TAU * t / 5.0                                                       # a slow breath; now and then a slight sway of the head
+    return crouch_pose(math.sin(ph * 2), math.sin(ph))
+
+
+# a creep of 110 steps a minute at the sim's 1.2 m/s for a crouched man (the archer's and the ashigaru's cadence): the hips 0.34 m down (at 0.40 the trailing knee
+# brushed the ground), the stance a little ahead of the hips, the back bent well forward, the heel's rise walk's (at 0.05 the toe dug 6 cm into the ground at
+# push-off; walk's 4 cm). The left hand steadies the scabbard at its mouth (turned down behind him as in the kneel); the right arm hangs low and swings a little
+SNEAK_V = 1.20
+SNEAK_G = dict(T=1.10, ahead=0.380, behind=0.360, duty=gait.duty_for(SNEAK_V, 1.10, 0.380, 0.360), lift=0.060, bob=0.012, sink=0.340, rise=0.070, spacing=0.110)
+SN_SAYA = (-24.0, 0.0, 6.0)
+
+
+def sneak(t):
+    feet, hips, ph2 = gait.cycle(t, **SNEAK_G)
+    tw = math.sin(ph2 + 0.2)
+    hz = 0.93 + hips.z
+    hr = dict(pos=V((-0.250, -0.300 - 0.060 * tw, hz - 0.080)), pole=V((-0.6, 0.6, -0.2)), space="world")
+    return fix(dict(hips_pos=V((hips.x, 0.0, hips.z)), hips_rot=(30.0, 0.0, 6.0 * tw), spine=(46.0, -5.0 * tw, 2.0 * math.sin(ph2)), neck=(-24.0, 3.0 * tw, 0.0),
+                    footL=feet["L"], footR=feet["R"], saya=SN_SAYA, handL=dict(LHAND_KOI), handR=hr, curl_L=0.75, curl_R=0.35))
+
+
 CLIPS = {
+    "equip": dict(fn=equip, duration=EQUIP_T, loop=False, weapon="sheathed", events={"take": EQUIP_TAKE}),
     "idle": dict(fn=idle, duration=8.0, loop=True, weapon="sheathed"),
     "walk": dict(fn=walk, duration=WALK_G["T"], loop=True, weapon="sheathed", speed=WALK_V),
     "run": dict(fn=run, duration=RUN_G["T"], loop=True, weapon="sheathed", speed=RUN_V),
@@ -353,4 +428,6 @@ CLIPS = {
     "block": dict(fn=block, duration=0.8, loop=False, weapon="drawn"),
     "hit": dict(fn=hit, duration=0.6, loop=False, weapon="drawn"),
     "death": dict(fn=death, duration=1.25, loop=False, weapon="drawn"),
+    "crouch_idle": dict(fn=crouch_idle, duration=5.0, loop=True, weapon="sheathed"),
+    "sneak": dict(fn=sneak, duration=SNEAK_G["T"], loop=True, weapon="sheathed", speed=SNEAK_V),
 }

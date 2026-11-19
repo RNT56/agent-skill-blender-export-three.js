@@ -18,16 +18,29 @@ def arg(name, default=None):
     return argv[argv.index(name) + 1] if name in argv else default
 
 
+NODES = ("body", "Armour_Oyoroi", "Helmet", "Katana_Drawn", "Katana_Sheathed", "Katana_Saya", "Sashimono")
+
+
 def main():
     from samurai import build, qa
     from samurai.pose import show_pose
     baked = arg("--bake") is not None
     if baked:
         from samurai import bake, shaders
-        m = build.build_model(arg("--stage", "all"), mat_fn=shaders.procedural)
-        objs = [m[k] for k in ("body", "Katana_Drawn", "Katana_Sheathed", "Katana_Saya", "Sashimono")]
+        from archer import bake as ABk, shaders as AS
+
+        def mat(key):                                          # the face is the archer's (so is the head it is painted on)
+            return (bpy.data.materials.get("sam_face") or AS.face("sam_face")) if key == "face" else shaders.procedural(key)
+
+        m = build.build_model(arg("--stage", "all"), mat_fn=mat)
+        objs = [m[k] for k in NODES]
         tex_dir = os.path.join(ROOT, arg("--bake"))
-        maps = bake.bake_atlas(objs, tex_dir, "samurai", px=int(arg("--px", 2048)), quality=float(arg("--quality", 1.0)), log=print)
+        # occlusion per piece: the body is not shaded by a helmet or an armour he may not be wearing; each piece by itself and the body under it.
+        # The face, the eyes and the hair get more texels (a bare head is looked at)
+        b = m["body"]
+        groups = [([b], [])] + [([m[k]], [b]) for k in NODES[1:]]
+        ABk.BOOST = {"sam_face": 2.6, "sam_eye": 2.1, "sam_iris": 2.1, "sam_hair": 1.6, "sam_kabuto": 1.2}
+        maps = ABk.bake_atlas(objs, tex_dir, "samurai", px=int(arg("--px", 2048)), quality=float(arg("--quality", 1.0)), log=print, ao_groups=groups)
         bake.assign_baked(objs, maps, "samurai")
         from samurai import emblems
         print("  emblem sheet:", emblems.write(tex_dir, "samurai"))
@@ -46,16 +59,25 @@ def main():
             o.objects.unlink(m["arm"])
         game.objects.link(m["arm"])
         body_ob = m["body"]
-        for o in (body_ob, m["Katana_Drawn"], m["Katana_Sheathed"], m["Katana_Saya"], m["Sashimono"]):
+        for o in [m[k] for k in NODES]:
             for c in list(o.users_collection):
                 c.objects.unlink(o)
             game.objects.link(o)
         body_ob.name = body_ob.data.name = "Samurai_LOD0"
-        lod_tris = [int(x) for x in arg("--lods", "7000,2200").split(",")]
-        # the scabbard is part of the body mesh from LOD1 on (one draw call fewer per unit at range); LOD2 also carries the sheathed hilt
-        extras_by_lod = {1: (m["Katana_Saya"], m["Sashimono"]), 2: (m["Katana_Saya"], m["Katana_Sheathed"], m["Sashimono"])}
-        for k, t in enumerate(lod_tris, start=1):
-            finalize.decimate_copy(body_ob, f"Samurai_LOD{k}", t, arm, game, extras=extras_by_lod.get(k, ()))
+        # LOD1: the body (with the scabbard in it) + the armour's low mesh (the banner is in THAT: he carries it only in armour) + the helmet's low mesh.
+        # Far, ONE mesh each: Samurai_LOD2 (armour, banner, helmet), Samurai_Far_Bare (the same, bare-headed), and for a man who has taken his armour off
+        # Samurai_Far_Robe_Kabuto / Samurai_Far_Robe_Bare (no armour, no banner).
+        lod_tris = [int(x) for x in arg("--lods", "4200,3400,2200,1800").split(",")]
+        arm_ob, helm = m["Armour_Oyoroi"], m["Helmet"]
+        finalize.decimate_copy(body_ob, "Samurai_LOD1", lod_tris[0], arm, game, extras=(m["Katana_Saya"],))
+        finalize.decimate_copy(arm_ob, "Armour_Oyoroi_Low", lod_tris[1], arm, game, extras=(m["Sashimono"],))
+        finalize.decimate_copy(helm, "Helmet_Low", lod_tris[3], arm, game)
+        far = (arm_ob, m["Katana_Saya"], m["Katana_Sheathed"], m["Sashimono"])
+        finalize.decimate_copy(body_ob, "Samurai_LOD2", lod_tris[2], arm, game, extras=far + (helm,))
+        finalize.decimate_copy(body_ob, "Samurai_Far_Bare", lod_tris[2], arm, game, extras=far)
+        robe = (m["Katana_Saya"], m["Katana_Sheathed"])
+        finalize.decimate_copy(body_ob, "Samurai_Far_Robe_Kabuto", 1800, arm, game, extras=robe + (helm,))
+        finalize.decimate_copy(body_ob, "Samurai_Far_Robe_Bare", 1600, arm, game, extras=robe)
         for o in game.objects:
             if o.type == "MESH":
                 n, bad, mx = finalize.weight_report(o)
@@ -95,6 +117,10 @@ def main():
         print("clip sheet", f"out/_clip_{arg('--clip')}_{view}.png")
     if arg("--render"):
         base = os.path.join(ROOT, arg("--render"))
+        for n in (arg("--hide") or "").split(","):                 # --hide Helmet,Armour_Oyoroi: look at what is under a piece
+            if n and n in m:
+                m[n].hide_render = True
+        qa.VIEWS.update({"top": ((0.25, -1.3, 3.5), (0.0, 0.0, 1.50), 80), "head_b": ((-0.55, 0.85, 1.90), (0.0, 0.03, 1.64), 62)})
         views = arg("--views", "front,side,three,head").split(",")
         files = qa.shoot(base, views, res=(int(arg("--w", 600)), int(arg("--h", 900))))
         qa.montage(files, base + "_sheet.png")

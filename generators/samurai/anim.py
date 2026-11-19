@@ -14,6 +14,7 @@ from .pose import Pose, Rig, key_pose
 V = Vector
 FPS = 30
 MX = Matrix.Diagonal((-1.0, 1.0, 1.0))
+KOIGUCHI = K.TSUBA_Y + 0.014          # the scabbard's mouth, metres from the kashira along the sheathed sword
 
 
 def smooth(t):
@@ -71,12 +72,16 @@ class Solver:
         if F is None:
             return
         tgt = V(F["pos"])
-        p.limb(f"thigh.{side}", f"shin.{side}", f"foot.{side}", tgt, V((0.10 * sx, -1.0, 0.1)), 1)
+        pole = V(F["kpole"]) if "kpole" in F else V((0.10 * sx, -1.0, 0.1))          # kpole: where the knee goes (a knee on the ground)
+        p.limb(f"thigh.{side}", f"shin.{side}", f"foot.{side}", tgt, pole, 1)
         yaw, pitch = math.radians(F.get("yaw", 0.0)), math.radians(F.get("pitch", 0.0))
         d = self.foot_rest_dir.copy()
         d = Euler((pitch, 0, 0), "XYZ").to_matrix() @ d
         d = Euler((0, 0, yaw), "XYZ").to_matrix() @ d
-        p.aim(f"foot.{side}", d, Euler((0, 0, yaw), "XYZ").to_matrix() @ V((0, 0, 1)))
+        up = V((0, 0, 1))
+        if F.get("instep"):                 # the foot turns rigidly by its pitch (an instep on the ground): past ~70 deg the up hint would roll it 180 deg and wring the ankle
+            up = Euler((pitch, 0, 0), "XYZ").to_matrix() @ up
+        p.aim(f"foot.{side}", d, Euler((0, 0, yaw), "XYZ").to_matrix() @ up)
         p.rot(f"toe.{side}", (F.get("toe", 0.0), 0, 0))
 
     def arm_ik(self, p, side, wrist, roll_pole=None):
@@ -124,6 +129,15 @@ class Solver:
         FhL = T @ FhR @ Matrix.Diagonal((-1.0, 1.0, 1.0))
         p._place("hand.L", FhL)
 
+    def saya(self, p, rot):
+        """Turn the sheathed sword (weapon_hip: scabbard and hilt) in the obi about the scabbard's mouth (koiguchi), rot = degrees in the hips' frame.
+        A man who bends forward lifts the scabbard's end behind him; the left hand on the koiguchi turns it back down."""
+        q = eul(rot)
+        h = self.rig.head["weapon_hip"]
+        k = K.HIP_ORIGIN + K.HIP_DIR * KOIGUCHI
+        p.rot("weapon_hip", q)
+        p.move("weapon_hip", k + q @ (h - k) - h)
+
     def fingers(self, p, P):
         for side, sx in (("L", 1.0), ("R", -1.0)):
             c = P.get(f"curl_{side}", 0.18)
@@ -161,6 +175,8 @@ class Solver:
         self.spine(p, P)
         self.leg(p, "L", P.get("footL"))
         self.leg(p, "R", P.get("footR"))
+        if P.get("saya") is not None:
+            self.saya(p, P["saya"])
         sw = P.get("sword")
         one = sw is not None and float(sw.get("one_hand", 0.0)) > 0.5
         if sw is not None:
@@ -177,6 +193,12 @@ class Solver:
                     self.arm_ik(p, s, tgt)
                 else:
                     sp = H.get("space", "hips")
+                    if sp not in ("hips", "world"):         # a bone's space: the target rides that bone (a hand on the scabbard follows the scabbard)
+                        Tb = M[sp] @ self.rig.rest[sp].inverted()
+                        self.arm_ik(p, s, Tb @ V(H["pos"]), H.get("pole"))
+                        if "dir" in H:
+                            p.aim(f"hand.{s}", Tb.to_3x3() @ V(H["dir"]), Tb.to_3x3() @ V(H.get("hint", (0, 0, 1))))
+                        continue
                     tgt = (T @ V(H["pos"])) if sp == "hips" else V(H["pos"])
                     self.arm_ik(p, s, tgt, H.get("pole"))
                     if "dir" in H:

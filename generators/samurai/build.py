@@ -17,8 +17,17 @@ def clear_scene():
     bpy.context.view_layer.update()
 
 
+def _mat(mat_fn, key):
+    """a material table that has no 'face' (the placeholder set) paints the face as skin"""
+    try:
+        return mat_fn(key)
+    except KeyError:
+        return mat_fn("skin" if key == "face" else key)
+
+
 def build_model(stage="all", mat_fn=None, coll_name="samurai_LOD0", split_tails=False):
-    """Returns dict(arm, body, drawn, sheathed, saya, parts). stage 'body' skips armour (fast look-dev)."""
+    """Returns dict(arm, body, Armour_Oyoroi, Helmet, Katana_*, Sashimono, parts). The body is whole without armour and helmet (they are their own skinned
+    nodes, so an engine can dress him). stage 'body' skips them (fast look-dev)."""
     mat_fn = mat_fn or materials.placeholder
     clear_scene()
     sc = bpy.context.scene
@@ -27,18 +36,28 @@ def build_model(stage="all", mat_fn=None, coll_name="samurai_LOD0", split_tails=
     table = rig.bone_table()
     arm = rig.build_armature(coll, table)
 
-    parts = body.all_soft(table)
-    if stage in ("armour", "all"):
-        parts += armour.all_armour(table)
+    # the head is the archer's (a face, ears, hair tied back over the crown): the helmet and the mask used to hide a plain egg, and he can stand bare-headed now
+    from archer import body as AB
+    HEAD = ("body_head", "body_eyes", "body_iris", "body_lids", "body_brow", "body_lash")
+    from archer import skin as AK
+    head = AB.head_parts() + AB.hair_parts()
+    soft_head = {id(p) for p in head}                      # skinned by the archer's rules (its neck turns inside the collar)
+    parts = [p for p in body.all_soft(table) if p.name not in HEAD] + head
+    gear = {"Armour_Oyoroi": armour.body_armour(), "Helmet": armour.helmet()} if stage in ("armour", "all") else {}
+    node_of = {id(p): name for name, ps in gear.items() for p in ps}
+    for ps in gear.values():
+        parts += ps
     go, gt = rig.grip_origin()
     M_hand = K.placement(go, gt, V((0, 0, -1)))
     weapons = K.hip_katana() + K.saya_parts() + K.hand_katana(M_hand) + banner.banner_parts()
 
-    objs = []
+    objs, piece = [], {}
     for p in parts + weapons:
         ob = p.to_object(coll)
-        ob.data.materials.append(mat_fn(p.mat))
-        skin.apply_weights(ob, arm)
+        if id(p) in node_of:
+            piece[ob.name] = node_of[id(p)]
+        ob.data.materials.append(_mat(mat_fn, p.mat))
+        (AK if id(p) in soft_head else skin).apply_weights(ob, arm)
         objs.append(ob)
 
     wmap = {}
@@ -46,6 +65,9 @@ def build_model(stage="all", mat_fn=None, coll_name="samurai_LOD0", split_tails=
     for ob in objs:
         if split_tails and ob.name.startswith("cloth_sash_tail"):      # measurement builds keep the tails apart from the body
             wmap.setdefault("Sash_Tails", []).append(ob)
+            continue
+        if ob.name in piece:
+            wmap.setdefault(piece[ob.name], []).append(ob)
             continue
         for prefix, target in GROUPS:
             if ob.name.startswith(prefix):
