@@ -44,7 +44,7 @@ const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffe
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = THREE.PCFShadowMap;            // the soft variant dithers its penumbra: under a wide hat brim a smooth face came out stippled
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 document.body.appendChild(renderer.domElement);
 
@@ -63,6 +63,7 @@ sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
 Object.assign(sun.shadow.camera, { left: -2.5, right: 2.5, top: 3, bottom: -1, near: 0.5, far: 14 });
 sun.shadow.bias = -0.0004;
+sun.shadow.normalBias = 0.03;                              // a wide hat or helmet brim over a face: without it the shaded skin is stippled with shadow acne
 scene.add(sun, new THREE.DirectionalLight(0x9db8ff, 0.8).translateX(-4).translateY(2).translateZ(-3));
 const ground = new THREE.Mesh(new THREE.CircleGeometry(3.2, 64).rotateX(-Math.PI / 2),
   new THREE.MeshStandardMaterial({ color: 0x4a4f44, roughness: 0.95 }));
@@ -74,7 +75,7 @@ const loader = new GLTFLoader().setKTX2Loader(ktx2).setMeshoptDecoder(MeshoptDec
 
 const state = { loaded: false, clip: null, lod: 0, t: 0, playing: true };
 window.__state = state;
-window.__view = { camera, controls };
+window.__view = { camera, controls, renderer, scene, three: THREE };      // + frame(pos, target, fov): one synchronous render for captures when no animation frames run (a hidden tab)
 let mixer, actions = {}, meta = {}, lods = {}, weapons = {}, root, report = {};
 
 function setLod(n) {
@@ -129,7 +130,7 @@ root.traverse(o => {
 // team colour + faction emblem: ?team=0|1 (default 0) and optionally ?emblem=<cell>; the asset's own material is replaced by the team copy (the contract in team_emblem.js)
 const TEAM_TINT = [new THREE.Color(0.80, 0.09, 0.11), new THREE.Color(0.10, 0.34, 0.92)], TEAM_EMBLEM = [1, 3];
 let teamAssets = null;
-try { teamAssets = await loadTeamAssets(OUT + ASSET); } catch (e) { errors.push('team assets: ' + e.message); }
+try { teamAssets = await loadTeamAssets(OUT + ASSET, '?t=' + Date.now()); } catch (e) { errors.push('team assets: ' + e.message); }
 const team = +(params.get('team') || 0);
 if (teamAssets) {
   const tm = teamMaterial(root.getObjectByProperty('isSkinnedMesh', true).material, { mask: teamAssets.mask, tint: TEAM_TINT[team] || TEAM_TINT[0], emblemTex: teamAssets.emblemTex, emblemMeta: teamAssets.emblemMeta,
@@ -192,6 +193,9 @@ renderer.setAnimationLoop(() => {
   controls.update();
   renderer.render(scene, camera);
 });
+window.__view.step = stepMixer;
+window.__view.frame = (pos, target, fov) => { if (pos) camera.position.fromArray(pos); if (target) controls.target.fromArray(target); if (fov) { camera.fov = fov; camera.updateProjectionMatrix(); }
+  controls.update(); renderer.render(scene, camera); return renderer.domElement; };
 addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
 </script>
 </body>

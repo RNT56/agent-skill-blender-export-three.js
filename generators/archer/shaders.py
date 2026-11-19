@@ -12,7 +12,7 @@ from . import consts as K
 TAU = 6.2832
 
 
-def cloth(name, c0, c1, valley, lint, team=0.0, pitch=0.0042, fold=1.0, dirt_from=0.75, rough=0.82, stripe=None):
+def cloth(name, c0, c1, valley, lint, team=0.0, pitch=0.0042, fold=1.0, dirt_from=0.75, rough=0.82, stripe=None, shade=0.36, wander=5.0):
     """Plain-weave cloth: two-tone dye, slubs, wandering folds whose valleys go dark, dust toward the ground. stripe = (period m, colour, strength) adds warp stripes."""
     b = NB(name)
     uvv, u, v = b.uv()
@@ -29,10 +29,10 @@ def cloth(name, c0, c1, valley, lint, team=0.0, pitch=0.0042, fold=1.0, dirt_fro
     col = b.mix(b.math("MULTIPLY", b.smoothstep(0.50, 0.9, b.noise(objv, 16.0, 3.0)), b.smoothstep(dirt_from, 0.05, oz)), base, (0.10, 0.072, 0.045, 1))
     col = b.mix(b.math("MULTIPLY", b.math("ADD", slub, weave), 0.07), col, lint)
     wob = b.noise(objv, 5.0, 2.0)
-    f1 = b.math("SINE", b.math("ADD", b.math("MULTIPLY", u, TAU / 0.066), b.math("MULTIPLY", wob, 5.0)))
+    f1 = b.math("SINE", b.math("ADD", b.math("MULTIPLY", u, TAU / 0.066), b.math("MULTIPLY", wob, wander)))
     f2 = b.math("SINE", b.math("ADD", b.math("MULTIPLY", u, TAU / 0.021), b.math("MULTIPLY", b.noise(objv, 19.0, 3.0), 9.0)))
     crease = b.math("MULTIPLY", b.math("ADD", b.math("MULTIPLY", f1, 0.70), b.math("MULTIPLY", f2, 0.12)), 0.75 * fold)
-    col = b.mix(b.math("MULTIPLY", b.smoothstep(0.10, 0.90, b.math("SUBTRACT", 0.0, crease)), 0.36), col, valley)
+    col = b.mix(b.math("MULTIPLY", b.smoothstep(0.10, 0.90, b.math("SUBTRACT", 0.0, crease)), shade), col, valley)
     weave_n = b.bump(b.math("ADD", b.math("MULTIPLY", weave, 0.5), b.math("MULTIPLY", slub, 0.3)), 0.9, 0.0016)
     n = b.bump(crease, 2.0, 0.010, normal=weave_n)
     return b.finish(col, b.math("ADD", rough, b.math("MULTIPLY", slub, 0.12)), 0.0, n, team=team)
@@ -266,13 +266,13 @@ def face(name="arc_face"):
     ax = b.math("ABSOLUTE", tc.outputs["X"])
     front = b.smoothstep(-0.02, -0.07, tc.outputs["Y"])
     n1 = b.noise(objv, 40.0, 4.0)
-    col = b.mix(b.smoothstep(0.3, 0.7, n1), (0.330, 0.180, 0.112, 1), (0.425, 0.238, 0.152, 1))
+    col = b.mix(b.smoothstep(0.25, 0.75, n1), (0.360, 0.198, 0.124, 1), (0.415, 0.232, 0.148, 1))
     sock = b.math("SUBTRACT", 1.0, b.smoothstep(0.35, 1.25, _ell(b, ax, oz, 0.031, 1.652, 0.020, 0.012)))
     flush = b.math("SUBTRACT", 1.0, b.smoothstep(0.30, 1.10, _ell(b, ax, oz, 0.050, 1.617, 0.026, 0.022)))
     nose = b.math("SUBTRACT", 1.0, b.smoothstep(0.30, 1.10, _ell(b, ax, oz, 0.0, 1.618, 0.014, 0.016)))
     lips = b.math("MULTIPLY", b.math("SUBTRACT", 1.0, b.smoothstep(0.55, 1.0, _ell(b, ax, oz, 0.0, 1.5822, 0.0245, 0.0085))), front)
     seam = b.math("MULTIPLY", b.math("SUBTRACT", 1.0, b.smoothstep(0.4, 1.0, _ell(b, ax, oz, 0.0, 1.5822, 0.0235, 0.0016))), front)
-    nostril = b.math("MULTIPLY", b.math("SUBTRACT", 1.0, b.smoothstep(0.5, 1.0, _ell(b, ax, oz, 0.0075, 1.6055, 0.0048, 0.0024))), front)
+    nostril = b.math("MULTIPLY", b.math("SUBTRACT", 1.0, b.smoothstep(0.5, 1.0, _ell(b, ax, oz, 0.0078, 1.6062, 0.0036, 0.0018))), front)
     beard = b.math("MULTIPLY", b.math("MULTIPLY", b.smoothstep(1.612, 1.590, oz), b.smoothstep(1.524, 1.540, oz)), b.math("SUBTRACT", 1.0, lips))
     beard = b.math("MULTIPLY", b.math("MULTIPLY", beard, b.smoothstep(0.02, -0.03, tc.outputs["Y"])), b.math("ADD", 0.80, b.math("MULTIPLY", b.noise(objv, 260.0, 2.0), 0.20)))
     col = b.mix(b.math("MULTIPLY", sock, 0.60), col, (0.185, 0.092, 0.064, 1))
@@ -280,11 +280,26 @@ def face(name="arc_face"):
     col = b.mix(b.math("MULTIPLY", beard, 0.24), col, (0.165, 0.118, 0.100, 1))
     col = b.mix(b.math("MULTIPLY", lips, 0.72), col, (0.300, 0.105, 0.085, 1))
     col = b.mix(b.math("MULTIPLY", seam, 0.85), col, (0.090, 0.030, 0.026, 1))
-    col = b.mix(b.math("MULTIPLY", nostril, 0.9), col, (0.060, 0.022, 0.016, 1))
-    pores = b.noise(objv, 900.0, 2.0)
-    n = b.bump(b.math("MULTIPLY", pores, 0.25), 0.3, 0.0008)
-    rough = b.math("SUBTRACT", b.math("ADD", 0.50, b.math("MULTIPLY", n1, 0.08)), b.math("MULTIPLY", lips, 0.14))
-    return b.finish(col, rough, 0.0, n)
+    col = b.mix(b.math("MULTIPLY", nostril, 0.6), col, (0.075, 0.030, 0.022, 1))
+    # no pore bump: at the atlas's texel size it is noise, and in a hat's shade (image light only) noisy normals sparkle
+    rough = b.math("SUBTRACT", b.math("ADD", 0.52, b.math("MULTIPLY", n1, 0.05)), b.math("MULTIPLY", lips, 0.14))
+    return b.finish(col, rough, 0.0)
+
+
+def eye(name="arc_eye"):
+    """The white of a bare-faced eye: off-white, a little red toward the corners (a pure white stares out from under a hat brim)."""
+    b = NB(name)
+    objv, oz = b.obj()
+    tc = b.node("ShaderNodeSeparateXYZ")
+    b.l.new(objv, tc.inputs["Vector"])
+    edge = b.smoothstep(0.004, 0.011, b.math("ABSOLUTE", b.math("SUBTRACT", b.math("ABSOLUTE", tc.outputs["X"]), 0.031)))
+    col = b.mix(b.math("MULTIPLY", edge, 0.55), (0.54, 0.50, 0.45, 1), (0.42, 0.27, 0.22, 1))
+    return b.finish(col, 0.24, 0.0, spec=0.7)
+
+
+def iris(name="arc_iris"):
+    b = NB(name)
+    return b.finish((0.034, 0.017, 0.009, 1), 0.12, 0.0, spec=0.85)
 
 
 def glove(name="arc_glove"):
@@ -334,10 +349,10 @@ def steel(name="arc_steel"):
 
 BUILDERS = {
     "face": face,
-    "skin": lambda: SSh.skin("arc_skin"), "eye": lambda: SSh.eye("arc_eye"), "iris": lambda: SSh.iris("arc_iris"), "hair": lambda: SSh.hair("arc_hair"),
+    "skin": lambda: SSh.skin("arc_skin"), "eye": eye, "iris": iris, "hair": lambda: SSh.hair("arc_hair"),
     "straw": lambda: SSh.straw("arc_straw"), "brass": lambda: SSh.gold("arc_brass"),
     "kosode": lambda: cloth("arc_kosode", (0.300, 0.215, 0.125, 1), (0.420, 0.315, 0.195, 1), (0.085, 0.055, 0.030, 1), (0.50, 0.40, 0.27, 1), pitch=0.0046,
-                            stripe=(0.0115, (0.170, 0.115, 0.068, 1), 0.16)),
+                            stripe=(0.0115, (0.170, 0.115, 0.068, 1), 0.10), shade=0.12, wander=2.2, fold=0.42),
     "juban": lambda: cloth("arc_juban", (0.46, 0.43, 0.37, 1), (0.60, 0.57, 0.50, 1), (0.20, 0.18, 0.15, 1), (0.66, 0.63, 0.56, 1), fold=0.35, pitch=0.0036),
     "hakama": lambda: cloth("arc_hakama", (0.017, 0.027, 0.066, 1), (0.036, 0.054, 0.118, 1), (0.005, 0.008, 0.021, 1), (0.065, 0.085, 0.150, 1), fold=1.15),
     "kyahan": lambda: cloth("arc_kyahan", (0.022, 0.036, 0.028, 1), (0.046, 0.068, 0.055, 1), (0.007, 0.011, 0.009, 1), (0.085, 0.105, 0.090, 1), fold=0.6, dirt_from=0.55),

@@ -98,6 +98,15 @@ The only face that shows is the band between the visor and the mask (z 1.59-1.70
 Clip choice is a pure state machine (`src/view/samurai_logic.js`): the sim has no wind-up, so the swing clip starts at `impact - cd` and its impact frame lands exactly when the sim damages; a unit running at a target inside 14 m draws on the way;
 locomotion playback = measured speed / `speed_mps`; death is fitted into the sim's corpse time; far units get LOD2, no weapon nodes, no shadow, a lower animation rate. See that repo's `tests/view/samurai_logic.test.mjs`.
 
+## Build id, occlusion grain, viewer hooks (2026-11-19)
+- `manifest.json` carries `build`: the first 12 hex digits of the SHA-1 of the exported GLB(s). An engine should fetch the manifest uncached and append the id to every
+  URL of the asset (GLB, team mask, emblem sheet, clips, cloth): a rebuilt GLB with last build's team mask from the browser cache paints team colour on the wrong texels.
+- `samurai.bake.bake_atlas(..., ao_samples=N, ao_blur=True)`: N FIXED occlusion samples and a 5 x 5 binomial filter. The default (40 adaptive samples) leaves grain that
+  lacquer hides and bare skin in a hat's shade shows as a stipple (there the image light times the occlusion is all the light there is). The archer bakes with 192 + blur.
+- Sub-texel shader noise (pores at 900 / m on a face that is 170 texels wide) bakes into random normals: leave it out.
+- `viewer/character.html`: `window.__view.frame(pos, target, fov)` renders one frame synchronously (captures from a hidden tab, where no animation frames run),
+  `__view.step(dt)` advances the mixer and the wind; hard-edged PCF shadows with a normal bias (a hat brim over a face).
+
 ## A second character: the light archer (`generators/archer_unit.py`, kit in `generators/archer/`)
 ```bash
 blender -b --factory-startup -P generators/archer_unit.py -- --bake out/archer_tex --px 2048 --quality 1.0 --finalize 1 --save fixtures/archer_unit.blend

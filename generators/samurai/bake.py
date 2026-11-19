@@ -178,7 +178,7 @@ def _px(img):
     return a.reshape(h, w, 4)
 
 
-def bake_atlas(objs, out_dir, name, px=2048, quality=1.0, log=print):
+def bake_atlas(objs, out_dir, name, px=2048, quality=1.0, log=print, ao_samples=None, ao_blur=False):
     sc = bpy.context.scene
     sc.render.engine = "CYCLES"
     sc.cycles.device = "CPU"
@@ -198,11 +198,22 @@ def bake_atlas(objs, out_dir, name, px=2048, quality=1.0, log=print):
     log("  normal baked")
     rgh = _bake_pass(tmp, "ROUGH", px, "_rgh", False, s_)
     met = _bake_pass(tmp, "METAL", px, "_met", False, s_)
-    ao = _bake_pass(tmp, "AO", px, "_ao", False, int(40 * quality))
+    # 40 adaptive samples leave grain in the occlusion: invisible on lacquer, a stipple on bare skin in a hat's shade (there the image light times the
+    # occlusion is all the light there is). ao_samples: that many FIXED samples; ao_blur: a 5 x 5 binomial filter over the result (the 10 px margin keeps islands apart)
+    adaptive = sc.cycles.use_adaptive_sampling
+    if ao_samples:
+        sc.cycles.use_adaptive_sampling = False
+    ao = _bake_pass(tmp, "AO", px, "_ao", False, ao_samples or int(40 * quality))
+    sc.cycles.use_adaptive_sampling = adaptive
     team = _bake_pass(tmp, "TEAM", px, "_team", False, 4)
     log("  rough / metal / ao baked")
     orm = np.zeros((px, px, 4), dtype=np.float32)
-    orm[..., 0] = np.clip(_px(ao)[..., 0], 0, 1)
+    occ = np.clip(_px(ao)[..., 0], 0, 1)
+    if ao_blur:
+        k = (1.0, 4.0, 6.0, 4.0, 1.0)
+        occ = sum(np.roll(occ, i - 2, axis=0) * k[i] for i in range(5)) / 16.0
+        occ = sum(np.roll(occ, i - 2, axis=1) * k[i] for i in range(5)) / 16.0
+    orm[..., 0] = occ
     orm[..., 1] = np.clip(_px(rgh)[..., 0], 0, 1)
     orm[..., 2] = np.clip(_px(met)[..., 0], 0, 1)
     orm[..., 3] = 1.0

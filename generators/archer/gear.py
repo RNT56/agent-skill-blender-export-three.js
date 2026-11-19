@@ -8,7 +8,7 @@ from samurai import armour as SA, body as SB
 from samurai.kit import Part, catmull, lerp, param_surf, sstep
 
 from . import bow as BW, consts as K, rig as R
-from .body import face_radii, robe_pt
+from .body import face_radii, head_xy, robe_pt
 from .kitx import loop, mtube
 
 V = Vector
@@ -47,9 +47,8 @@ def hat_parts():
     for sx in (1, -1):
         pts = []
         for z, a, off in ((1.752, -22.0, 0.006), (1.700, -27.0, 0.0050), (1.650, -33.0, 0.0048), (1.605, -44.0, 0.0090), (1.565, -60.0, 0.0065), (1.535, -78.0, 0.0060), (1.5215, -90.0, 0.0050)):
-            rx, ry, cy = face_radii(z)
-            ar = math.radians(a)
-            pts.append(V((sx * math.cos(ar) * (rx + off), cy + math.sin(ar) * (ry + off), z)))
+            x, y = head_xy(math.radians(a), z, off)
+            pts.append(V((sx * x, y, z)))
         mtube(C, catmull(pts, 3), lambda t: (0.0034, 0.0034), 5, (True, True))
     C.sphere((0, face_radii(1.5215)[2] - face_radii(1.5215)[1] - 0.006, 1.517), 0.0080, 0.0060, 0.0060, 6, 4)       # the knot
     for sx in (1, -1):
@@ -64,8 +63,8 @@ def hachimaki_parts():
 
     def fn(s, v):
         a = s / 24.0 * math.tau
-        rx, ry, cy = face_radii(v)
-        return V((math.cos(a) * (rx + 0.0068), cy + math.sin(a) * (ry + 0.0068), v))
+        x, y = head_xy(a, v, 0.0068)
+        return V((x, y, v))
 
     B.strip(param_surf(fn, inside=SA.HEAD_AX), 24, 1.702, 1.732, nv=1, relief=0.0, thick=0.0042, groove=None, closed=True)
     rx, ry, cy = face_radii(R.TAIL_Z)

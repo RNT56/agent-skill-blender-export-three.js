@@ -14,9 +14,21 @@ V = Vector
 
 # ------------------------------------------------------------------------------------------------------------- shared surfaces
 def face_radii(z):
-    """(rx, ry, cy) of the bare head at height z: the samurai's skull with a narrower jaw (shared with the hat cords and the hair)."""
+    """(rx, ry, cy) of the bare head at height z: the samurai's skull with a slightly narrower jaw (shared with the hat cords, the head band and the hair)."""
     rx, ry, cy = SB.head_radii(z)
-    return rx * (1.0 - 0.17 * sstep(1.632, 1.552, z)), ry, cy
+    return rx * (1.0 - 0.07 * sstep(1.632, 1.552, z)), ry, cy
+
+
+def face_n(z):
+    """Superellipse exponent of the head section at z: a round cranium, a squarer jaw (a jaw line and flat cheeks instead of an egg), a round chin."""
+    return 2.0 + 0.70 * sstep(1.648, 1.596, z) * sstep(1.530, 1.560, z)
+
+
+def head_xy(a, z, off=0.0):
+    """(x, y) on the head section at angle a (radians; -90 deg is the front), `off` metres outside it."""
+    rx, ry, cy = face_radii(z)
+    x, y = SA.sup(a, rx + off, ry + off, face_n(z))
+    return x, cy + y
 
 
 def robe_at(z):
@@ -44,25 +56,26 @@ FACE_A = [0, 30, 60, 90, 120, 150, 180, 195] + list(range(204, 337, 6)) + [345]
 
 
 def face_d(x, z):
-    """How far the face stands out of the skull ellipse at (x, z), metres: brow, nose, lips, chin, cheek bones, eye sockets."""
+    """How far the face stands out of the head section at (x, z), metres: brow ridge, nose, lips, chin, cheek bones, eye sockets."""
     ax = abs(x)
-    brow = g(z, 1.668, 0.011) * g(x, 0, 0.056) * 0.0090
-    bridge = g(z, 1.655, 0.018) * g(x, 0, 0.0125) * 0.0080
-    nt = min(max((1.654 - z) / 0.041, 0.0), 1.0)                                 # 0 at the bridge, 1 at the tip
-    win = 1.0 if z >= 1.613 else g(z, 1.613, 0.0058)
-    nose = (0.0035 + 0.0205 * nt ** 1.15) * (0.72 * g(x, 0, 0.0080 + 0.0045 * nt) + 0.28 * g(x, 0, 0.0150 + 0.0040 * nt)) * win * (1.0 if z <= 1.654 else g(z, 1.654, 0.010))
-    wings = g(z, 1.6100, 0.0058) * g(ax, 0.0135, 0.0058) * 0.0072
-    muzzle = g(z, 1.586, 0.014) * g(x, 0, 0.027) * 0.0050
-    up_lip = g(z, 1.5870, 0.0034) * g(x, 0, 0.0200) * 0.0052 - g(z, 1.5930, 0.0040) * g(x, 0, 0.0040) * 0.0016
-    lo_lip = g(z, 1.5770, 0.0040) * g(x, 0, 0.0175) * 0.0064
-    mouth = -g(z, 1.5822, 0.0017) * g(x, 0, 0.0230) * 0.0046
-    corner = -g(z, 1.582, 0.0045) * g(ax, 0.0255, 0.006) * 0.0022
-    under = -g(z, 1.5685, 0.0042) * g(x, 0, 0.016) * 0.0030
-    chin = g(z, 1.549, 0.011) * g(x, 0, 0.021) * 0.0075
-    socket = -(g(z, 1.652, 0.009) * g(ax, 0.031, 0.014)) * 0.0060                # the samurai's socket: its eye parts fit this head
-    cheek = g(z, 1.616, 0.020) * g(ax, 0.050, 0.016) * 0.0055 + g(z, 1.566, 0.020) * g(ax, 0.050, 0.014) * 0.0030
-    hollow = -g(z, 1.583, 0.018) * g(ax, 0.047, 0.014) * 0.0035                  # under the cheek bones: a lean face
-    return brow + bridge + nose + wings + muzzle + up_lip + lo_lip + mouth + corner + under + chin + socket + cheek + hollow
+    brow = g(z, 1.667, 0.0095) * g(x, 0, 0.060) * 0.0100 + g(z, 1.669, 0.0080) * g(ax, 0.034, 0.020) * 0.0038      # the ridge is heaviest over the eyes
+    glab = -g(z, 1.6575, 0.0060) * g(x, 0, 0.010) * 0.0022                        # the dip at the root of the nose
+    nt = min(max((1.656 - z) / 0.043, 0.0), 1.0)                                 # 0 at the root, 1 at the tip
+    win = 1.0 if z >= 1.613 else g(z, 1.613, 0.0062)
+    nose = (0.0052 + 0.0250 * nt ** 1.25) * (0.70 * g(x, 0, 0.0076 + 0.0050 * nt) + 0.30 * g(x, 0, 0.0140 + 0.0050 * nt)) * win * (1.0 if z <= 1.656 else g(z, 1.656, 0.009))
+    wings = g(z, 1.6105, 0.0060) * g(ax, 0.0150, 0.0060) * 0.0092
+    muzzle = g(z, 1.588, 0.016) * g(x, 0, 0.030) * 0.0072
+    up_lip = g(z, 1.5872, 0.0036) * g(x, 0, 0.0210) * 0.0060 - g(z, 1.5940, 0.0045) * g(x, 0, 0.0045) * 0.0020      # with the philtrum
+    lo_lip = g(z, 1.5768, 0.0044) * g(x, 0, 0.0185) * 0.0076
+    mouth = -g(z, 1.5822, 0.0016) * g(x, 0, 0.0240) * 0.0050
+    corner = -g(z, 1.582, 0.0050) * g(ax, 0.0265, 0.0065) * 0.0030
+    under = -g(z, 1.5680, 0.0045) * g(x, 0, 0.018) * 0.0042
+    chin = g(z, 1.5475, 0.0125) * g(x, 0, 0.0250) * 0.0120
+    socket = -(g(z, 1.652, 0.0095) * g(ax, 0.032, 0.0150)) * 0.0078              # the eye parts sit in it
+    cheek = g(z, 1.622, 0.017) * g(ax, 0.054, 0.017) * 0.0078
+    hollow = -g(z, 1.585, 0.020) * g(ax, 0.050, 0.015) * 0.0042                  # under the cheek bones: a lean face
+    temple = -g(z, 1.676, 0.016) * g(ax, 0.070, 0.012) * 0.0030
+    return brow + glab + nose + wings + muzzle + up_lip + lo_lip + mouth + corner + under + chin + socket + cheek + hollow + temple
 
 
 def head_parts():
@@ -74,21 +87,22 @@ def head_parts():
         pts = []
         for ad in FACE_A:
             a = math.radians(ad)
-            ca, sa = math.cos(a), math.sin(a)
-            x, y = ca * rx, sa * ry
-            y -= max(0.0, -sa) * face_d(x, z)
-            pts.append(V((x, cy + y, z)))
+            x, y = head_xy(a, z)
+            y -= max(0.0, -math.sin(a)) * face_d(x, z)
+            pts.append(V((x, y, z)))
         rings.append(pts)
     P.loft(rings, True, (True, True))
     E = Part("body_ears", "face", bone="head", sharp=80)
     for sx in (1, -1):
         rx, ry, cy = face_radii(1.642)
-        c = V((sx * (rx + 0.0045), cy + 0.016, 1.642))
-        E.sphere(c, 0.0075, 0.0150, 0.0270, 8, 6)
-        E.sphere(c + V((sx * 0.0030, 0.0030, -0.020)), 0.0060, 0.0090, 0.0100, 6, 4)      # lobe
+        c = V((sx * (rx + 0.0030), cy + 0.017, 1.642))
+        E.sphere(c, 0.0052, 0.0125, 0.0255, 10, 7)                                           # the shell, lying back against the skull
+        E.sphere(c + V((sx * 0.0024, 0.0020, -0.0215)), 0.0052, 0.0078, 0.0088, 7, 5)        # the lobe
+        rim = [c + V((sx * 0.0046, dy, dz)) for dy, dz in ((-0.0085, -0.0100), (-0.0070, 0.0120), (0.0010, 0.0235), (0.0100, 0.0160), (0.0125, -0.0020), (0.0085, -0.0160))]
+        E.tube(catmull(rim, 3), lambda t: (0.0030, 0.0034 - 0.0008 * t), 5, (True, True))     # the helix
     N = Part("body_neck", "skin", soft="neck", sharp=80)
-    mtube(N, [V((0, -0.004, 1.385)), V((0, -0.005, 1.42)), V((0, -0.006, 1.455)), V((0, -0.007, 1.49)), V((0, -0.008, 1.52)), V((0, -0.010, 1.548))],
-          lambda t: (0.0500 - 0.0045 * t, 0.0540 - 0.0040 * t), 12, (True, True),
+    mtube(N, [V((0, -0.002, 1.385)), V((0, -0.004, 1.42)), V((0, -0.007, 1.455)), V((0, -0.010, 1.49)), V((0, -0.013, 1.52)), V((0, -0.016, 1.552))],
+          lambda t: (0.0530 - 0.0085 * t + 0.0030 * g(t, 0.0, 0.25), 0.0560 - 0.0070 * t), 12, (True, True),
           mod=lambda t, a: 1.0 + 0.05 * g(t, 0.62, 0.22) * max(0.0, -math.sin(a)) ** 3)        # the throat
     return [P, E, N] + eyes_parts()
 
@@ -102,11 +116,11 @@ def eyes_parts():
     Ln = Part("body_lash", "iris", bone="head", sharp=80)
     for sx in (1, -1):
         cx, cy, cz = sx * 0.031, -0.099, 1.652
-        P.sphere((cx, cy, cz), 0.0125, 0.0046, 0.0054, 8, 5)
-        I.sphere((cx - sx * 0.0004, cy - 0.0030, cz - 0.0002), 0.0049, 0.0030, 0.0049, 7, 4)
-        L.sphere((cx, cy - 0.0018, cz + 0.0058), 0.0133, 0.0060, 0.0032, 6, 3)
-        L.sphere((cx, cy - 0.0014, cz - 0.0052), 0.0125, 0.0052, 0.0022, 6, 3)
-        lash = [V((sx * 0.0185, cy - 0.0050, cz + 0.0018)), V((sx * 0.0310, cy - 0.0069, cz + 0.0046)), V((sx * 0.0445, cy - 0.0046, cz + 0.0020))]
+        P.sphere((cx, cy, cz), 0.0122, 0.0046, 0.0047, 8, 5)
+        I.sphere((cx - sx * 0.0006, cy - 0.0030, cz - 0.0003), 0.0053, 0.0030, 0.0053, 8, 5)
+        L.sphere((cx, cy - 0.0020, cz + 0.0061), 0.0140, 0.0064, 0.0037, 8, 4)                # the upper lid covers the top of the iris: a level gaze, not a stare
+        L.sphere((cx, cy - 0.0012, cz - 0.0050), 0.0128, 0.0052, 0.0024, 6, 3)
+        lash = [V((sx * 0.0180, cy - 0.0052, cz + 0.0006)), V((sx * 0.0310, cy - 0.0074, cz + 0.0019)), V((sx * 0.0452, cy - 0.0048, cz + 0.0008))]
         Ln.tube(catmull(lash, 2), lambda t: (0.0010, 0.0010), 4, (True, True))
         pts = [V((sx * 0.0125, -0.1085, 1.6690)), V((sx * 0.0310, -0.1105, 1.6755)), V((sx * 0.0540, -0.1010, 1.6735))]
         Bw.tube(catmull(pts, 3), lambda t: (0.0034 - 0.0014 * t, 0.0026), 5, (True, True))
@@ -121,8 +135,8 @@ def hair_parts():
         a = math.radians(lerp(-34.0, 214.0, u))
         z0 = 1.590 + 0.070 * abs(2.0 * u - 1.0) ** 2.6                        # the hairline dips to the nape and rises to the temples
         z = lerp(z0, 1.716, v)
-        rx, ry, cy = face_radii(z)
-        return V((math.cos(a) * (rx + 0.0046), cy + math.sin(a) * (ry + 0.0046), z))
+        x, y = head_xy(a, z, 0.0046)
+        return V((x, y, z))
 
     H.slab(param_surf(fn, inside=SA.HEAD_AX), 14, 4, 0.0044, chamfer=0.02, uvf=lambda u, v: (u * 0.42, v * 0.12))
     rings = []

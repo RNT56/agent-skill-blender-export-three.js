@@ -7,7 +7,7 @@ import numpy as np
 
 from samurai import bake as SBk
 
-BOOST = {"arc_face": 2.1, "arc_eye": 2.1, "arc_iris": 2.1, "arc_hair": 1.6, "arc_jingasa": 1.35, "arc_fletch": 1.4, "arc_teamcloth": 1.2}
+BOOST = {"arc_face": 2.6, "arc_eye": 2.1, "arc_iris": 2.1, "arc_hair": 1.6, "arc_jingasa": 1.35, "arc_fletch": 1.4, "arc_teamcloth": 1.2}
 
 
 def atlas_uv(objs, margin=0.0016):
@@ -75,7 +75,7 @@ def atlas_uv(objs, margin=0.0016):
 
 def bake_atlas(objs, out_dir, name, px=2048, quality=1.0, log=print):
     SBk.atlas_uv = atlas_uv                                   # the samurai baker calls its module-level atlas_uv: give it the weighted one for this run
-    return SBk.bake_atlas(objs, out_dir, name, px=px, quality=quality, log=log)
+    return SBk.bake_atlas(objs, out_dir, name, px=px, quality=quality, log=log, ao_samples=int(192 * quality), ao_blur=True)       # bare skin under a hat brim shows AO grain that armour hides
 
 
 assign_baked = SBk.assign_baked

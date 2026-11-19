@@ -5,12 +5,12 @@
 // One material per team (the emblem cell and the tint are uniforms of that material); the shader program is shared.
 import * as THREE from 'three';
 
-export async function loadTeamAssets(base) {
+export async function loadTeamAssets(base, ver = '') {          // ver: a query suffix ('?v=<manifest.build>') so the side files are of the same build as the GLB
   const tex = (url, srgb) => new THREE.TextureLoader().loadAsync(url).then(t => { t.flipY = false; t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace; t.anisotropy = 4; return t; });
   const [mask, emblemTex, emblemMeta] = await Promise.all([
-    tex(`${base}.team.png`, false),
-    tex(`${base}.emblems.png`, false).catch(() => null),
-    fetch(`${base}.emblems.json`).then(r => (r.ok ? r.json() : null)).catch(() => null),
+    tex(`${base}.team.png${ver}`, false),
+    tex(`${base}.emblems.png${ver}`, false).catch(() => null),
+    fetch(`${base}.emblems.json${ver}`).then(r => (r.ok ? r.json() : null)).catch(() => null),
   ]);
   return { mask, emblemTex, emblemMeta };
 }

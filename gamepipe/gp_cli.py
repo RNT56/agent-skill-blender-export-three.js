@@ -9,6 +9,7 @@ Flow: recipe builds derived assets (if the spec names one) -> contract check -> 
 Output: <repo>/out/<asset>/  (GLBs, textures/, *.report.json, manifest.json, *.preview.png). Exit 0 = pass, 1 = fail.
 """
 import importlib
+import hashlib
 import json
 import os
 import sys
@@ -97,6 +98,13 @@ def run(spec_path, report_only=False, preview=True, out_override=None):
                              "dimensions_m": r["stats"].get("dimensions_m")})
         manifest = {"asset": spec["name"], "recipe": spec.get("recipe"), "passed": passed, "look": spec.get("look", "golden_hour"),
                     "lods": lods}
+        glbs = sorted({r["export"]["path"] for r in reports if r.get("export")})
+        if glbs:                                                 # a content id of this build: an engine appends it to the asset's URLs, so a GLB and its side files
+            h = hashlib.sha1()                                   # (team mask, emblem sheet, clips, cloth) never mix two builds through a browser cache
+            for g in glbs:
+                with open(g, "rb") as fh:
+                    h.update(fh.read())
+            manifest["build"] = h.hexdigest()[:12]
         cj = os.path.join(out_dir, "clips.json")
         if os.path.exists(cj):
             with open(cj) as fh:
