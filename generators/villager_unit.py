@@ -9,6 +9,7 @@ Stages (each reads what the one before saved in --work, default /Volumes/△/_sc
     atlas    [--px 2048]                  body-part UV charts + the real bake                 -> villager_skin.blend, tex/
     clips    [--mocap <dir>]              mocap bases + authored work clips                   -> villager_anim.blend
     finalize                              LODs, props, team mask, fixture                     -> fixtures/villager_unit.blend
+    add_clips [--only crouch_idle,sneak]  authored clips written into a FINISHED fixture, nothing else touched   -> fixtures/<name>.blend, out/villager_qa_hide/
 See docs/villager.md.
 """
 import os
@@ -67,6 +68,20 @@ def main():
     elif stage == "clips":
         from villager import clips
         clips.run(work, rel(A.get("mocap", cfg["mocap"])), only=A.get("only"), cfg=cfg)
+    elif stage == "add_clips":
+        # clips written into a FINISHED body (its fixture), nothing else touched: the 20 clips it was delivered with stay bit for bit what they were
+        import json
+
+        import bpy
+        from villager import clips
+        sp = variants.spec(name)
+        with open(os.path.join(ROOT, "specs", name + ".json"), "w") as fh:
+            json.dump(sp, fh, indent=1)
+        fx = rel(A.get("save", sp["source_blend"]))
+        names = (A.get("only") or ",".join(clips.HIDE)).split(",")
+        clips.add_to_fixture(fx, names, cfg)
+        bpy.ops.wm.open_mainfile(filepath=fx)                # QA from the saved file, never saved again (it changes render settings)
+        clips.qa_hide(names, rel(A.get("qa", os.path.join("out", "villager_qa_hide"))), body=name)
     elif stage == "finalize":
         from villager import finalize
         sp = variants.spec(name)

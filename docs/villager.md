@@ -16,7 +16,7 @@ Everything below runs headless (`blender -b`), one stage per call, each reading 
 | `clips` | `clips.py` | motion capture retargeted as armature-aligned deltas, looped, re-pitched (`amplify`), variants by re-solving the arms; the trades authored with a swing model in the chest's frame. QA strips per clip |
 | `finalize` | `finalize.py` | prop strip painted (`props.paint_strip`), jacket mask from position + colour, 1024 game textures, LOD1 / LOD2, collection `villager_game`, fixture |
 
-Then `bin/gp build specs/villager_unit_01.json` and `blender -b fixtures/villager_unit.blend -P tests/test_villager_golden.py` (21 checks). Game side: samurai-vale `docs/VILLAGER_UNIT.md` (it has the exact commands).
+Then `bin/gp build specs/villager_unit_01.json` and `blender -b fixtures/villager_unit.blend -P tests/test_villager_golden.py` (34 checks). Game side: samurai-vale `docs/VILLAGER_UNIT.md` (it has the exact commands).
 
 ![rig stress poses](villager/rig_sheet.jpg)
 ![work clips, side view](villager/overview_side.jpg)
@@ -32,6 +32,20 @@ Every stage takes `--name villager_unit_0N`; the table in `variants.py` holds wh
 - **The undyed jacket is normalised to one brightness** (linear 0.339) in `finalize`, so one dye constant in the engine serves every body.
 - **Regression**: after generalising, body 1 was rebuilt from its sources: same clip statistics, the gate and the golden test pass; the GLB differs by 0.04% in size (bake and JPEG are not bit-stable).
 - Not automatic: the hat's seat (`hat_drop`): a shaved pate needed 33 mm more than hair. Look at `qa/final_sheet.jpg` of a new body.
+
+## Hiding: `crouch_idle` and `sneak` (added 2026-11-19)
+Two authored loops for a villager taking cover in tall grass (`clips.HIDE`); the game's crouch silhouette is 0.95 m.
+- `crouch_idle` (5.0 s, 150 frames): down on his haunches, heels up, torso over the knees, the left forearm across the left knee, the right hand low by the right foot
+  (a tool in it lies level, pointing ahead); two breaths a loop, a glance to the left and to the right. Head top 0.84 to 0.94 m over the four bodies.
+- `sneak` (0.9 s, 27 frames, `speed_mps` 1.20): a deep creep in place. Feet are placed by the BALL (`plant_ball`: the ankle is derived from the ball and the heel's
+  pitch, so a peeling heel does not drag the toe), each ball travels back at exactly 1.2 m/s for 62% of the cycle and is carried forward on a Hermite path that
+  leaves and lands at ground speed. Rotated to start on the left foot's reach like walk / run. Head top 0.98 to 1.09 m.
+- Hands and feet are placed relative to the body's own joints, so these two need no fitting to the other bodies (`Body.chest_ref` is not used).
+- They were added to the finished bodies with `--stage add_clips` (it opens `fixtures/<name>.blend`, writes only these Actions, saves, then renders
+  `out/villager_qa_hide/`): the 20 delivered clips, meshes and textures stay byte-identical in the GLB. The hand frames `curl()` needs are read back from the
+  grip bones (`clips.hands_from_rig`), so no work directory is needed. A full rebuild makes them in `--stage clips` like every other clip.
+- `tests/test_villager_golden.py` measures the skinned meshes at every frame (head top, every tool, lowest point), the planted toe's speed, the footfall,
+  and holds the 20 delivered clips to `tests/villager_clips_baseline.json`.
 
 ## Things learned (candidates for GOTCHAS.md)
 1. **Smart UV Project on a decimated organic mesh** gives thousands of islands (17% of the atlas used). Cut charts along the body instead: label faces by skin weight + a half-space, merge small pieces, mark seams between labels, unwrap. 21 islands.

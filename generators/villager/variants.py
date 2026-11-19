@@ -30,7 +30,7 @@ def get(name):
 def spec(name):
     """the gate's spec for a body (they differ only in names)."""
     clips = ["idle", "walk", "run", "walk_tool", "run_tool", "carry_shoulder_idle", "carry_shoulder_walk", "carry_shoulder_run", "carry_front_idle", "carry_front_walk",
-             "carry_front_run", "chop", "mine", "hoe", "hammer", "chisel", "saw", "cut", "fish", "craft"]
+             "carry_front_run", "chop", "mine", "hoe", "hammer", "chisel", "saw", "cut", "fish", "craft", "crouch_idle", "sneak"]
     return {
         "name": name, "type": "character", "recipe": "character", "source_blend": f"fixtures/{name}.blend" if name != "villager_unit_01" else "fixtures/villager_unit.blend", "preview": False,
         "budgets": {"max_tris": 19000, "max_materials": 1, "max_texture_px": 1024, "max_file_mb": 9},

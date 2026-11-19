@@ -656,11 +656,168 @@ def clip_craft(B, T=2.4):
 
 
 WORK = {"chop": clip_chop, "mine": clip_mine, "hoe": clip_hoe, "hammer": clip_hammer, "chisel": clip_chisel, "saw": clip_saw, "cut": clip_cut, "fish": clip_fish, "craft": clip_craft}
+
+
+# ---------------------------------------------------------------------------------------------------- authored: hiding
+# A villager taking cover in tall grass. The game's crouch silhouette is 0.95 m: the head stays under about 1.0 m crouched and 1.15 m creeping.
+# Hands and feet are placed relative to the body's OWN joints (knees, ankles, toes), so the clips need no fitting to the other bodies.
+SNEAK_SPEED = 1.2          # m/s the creep is authored for (clips.json speed_mps; the game plays it at measured speed / this)
+SNEAK_FRAMES = 27          # one cycle (two steps)
+
+
+def _smooth(a, b, x):
+    u = min(max((x - a) / (b - a), 0.0), 1.0)
+    return u * u * (3 - 2 * u)
+
+
+def plant_ball(B, p, side, ball, yaw=0.0, pitch=0.0, splay=0.22):
+    """B.plant by the BALL of the foot (the toe bone's head) rather than the ankle: with the heel lifted (pitch > 0) the ball stays where it is put,
+    so a rolling foot does not skid. ball: armature-space target; splay: how far the knee points out (B.plant's 0.22). Returns the leg's reach ratio."""
+    s = side
+    sx = 1.0 if s == "L" else -1.0
+    Rw = Matrix.Rotation(math.radians(yaw), 3, "Z") @ Matrix.Rotation(math.radians(pitch), 3, "X")
+    off = B.rig.head[f"toe.{s}"] - B.ankle[s]
+    tgt = V(ball) - Rw @ off
+    ya = math.radians(yaw)
+    fwd = V((math.sin(ya), -math.cos(ya), 0.0))
+    r = p.limb(f"thigh.{s}", f"shin.{s}", None, tgt, fwd + V((splay * sx, 0, 0.1)), 1.0)
+    p._place(f"foot.{s}", Rw @ B.rig.rest_rot[f"foot.{s}"])
+    p._place(f"toe.{s}", Matrix.Rotation(ya, 3, "Z") @ B.rig.rest_rot[f"toe.{s}"])
+    return r
+
+
+def clip_crouch_idle(B, T=5.0):
+    """hiding: down on his haunches, heels up, torso over the knees, head low; the left forearm across the left knee, the right hand low by the
+    right foot (a tool in it lies level along the ground); breathing, a slow glance to the left and to the right."""
+    look = Curve([(0.0, 0.0), (0.8, 0.0), (1.4, 1.0), (2.3, 1.0), (2.9, 0.05), (3.3, 0.0), (3.8, -0.75), (4.5, -0.75)], T)
+    kl = B.kl
+
+    def fn(t):
+        ph = 2 * math.pi * t / T
+        br = math.sin(2 * ph)                                  # two breaths a loop
+        g = look(t)
+        sw = math.sin(ph)
+        p = B.pose()
+        p.move("hips", (0.010 * sw, 0.11 * kl, (-0.52 + 0.004 * br) * kl))
+        p.rot("hips", (30, 0, -3 + 1.5 * sw))
+        rr = plant_ball(B, p, "L", B.rig.head["toe.L"] + V((0.03, -0.13 * kl, 0.0)), 16, 34)
+        rr = max(rr, plant_ball(B, p, "R", B.rig.head["toe.R"] + V((-0.05, 0.05 * kl, 0.0)), -20, 34))
+        B.spine(p, bend=44 + 1.3 * br, twist=2 + 5 * g)
+        for s, sx in (("L", 1.0), ("R", -1.0)):               # the shoulders rise a little with each breath
+            p.rot(f"shoulder.{s}", (0, 0, sx * 1.2 * br))
+        p.rot("neck", (-8, 0, 10 * g))
+        p.rot("head", (-8 + 1.0 * br, 0, 16 * g))
+        # the left forearm across the left knee, the hand hanging over it
+        knee = p.head("shin.L")
+        GL = knee + V((0.010, -0.085, 0.030))
+        TL = B.grip_frame("L", GL, (-0.25, -0.50, -0.83), (-0.15, 0.35, -0.95))
+        r2, m2 = B.place_hand(p, "L", TL, pole=(0.75, 0.55, -0.35))
+        B.curl(p, "L", 0.38 + 0.04 * br)
+        # the right hand low beside the right foot, closed on a handle that lies level, pointing ahead
+        ank = p.head("foot.R")
+        GR = ank + V((-0.115, -0.115, 0.205)) + V((0, 0, 0.004 * br))
+        TR = B.frame(GR, (-0.10, -0.995, 0.0), (-0.30, -0.10, -0.95))
+        r1, m1 = B.place_hand(p, "R", TR, pole=(-0.80, 0.50, -0.30))
+        B.curl(p, "R", 0.95)
+        return p, max(rr, r1, r2), max(m1, m2)
+    return fn, T, {}
+
+
+def clip_sneak(B, v=SNEAK_SPEED, n=SNEAK_FRAMES):
+    """creeping through the grass, in place: knees deep, torso forward, head low but looking ahead. Each foot is planted for 62% of the cycle and
+    its ball travels back at exactly `v` (the heel peels up late in the stance), then is carried forward high over the grass and set down already
+    moving with the ground, so nothing slides. Arms low at the sides, swinging a little against the legs; a tool in the right hand is held level."""
+    T = n / FPS
+    beta = 0.62                                                # duty factor: part of the cycle a foot is down
+    S = v * beta * T                                           # how far the ball travels while it is down
+    Ts = (1 - beta) * T
+    kl = B.kl
+    lift = 0.10 * kl
+    HEEL = 32.0                                                # degrees the heel is up when the foot leaves the ground
+
+    def foot(phi):
+        """(fore-aft offset of the ball from its neutral spot, + = back; lift; pitch, + = heel up)"""
+        if phi < beta:
+            u = phi / beta
+            return -S / 2 + S * u, 0.0, HEEL * _smooth(0.48, 1.0, u)
+        u = (phi - beta) / (1 - beta)
+        h00, h10, h01, h11 = 2 * u ** 3 - 3 * u ** 2 + 1, u ** 3 - 2 * u ** 2 + u, -2 * u ** 3 + 3 * u ** 2, u ** 3 - u ** 2
+        y = h00 * (S / 2) + h10 * (v * Ts) + h01 * (-S / 2) + h11 * (v * Ts)      # Hermite: leaves and lands moving back at v
+        z = lift * math.sin(math.pi * u) ** 0.7
+        pitch = HEEL * (1 - _smooth(0.0, 0.45, u)) - 7.0 * math.sin(math.pi * _smooth(0.30, 1.0, u))
+        return y, z, pitch
+
+    def fn(t):
+        phi = (t / T) % 1.0
+        c1 = math.cos(2 * math.pi * phi)
+        p = B.pose()
+        bob = -0.008 * math.cos(4 * math.pi * (phi - 0.06))
+        p.move("hips", (0.018 * math.sin(2 * math.pi * (phi - 0.06)), 0.07 * kl, -0.46 * kl + bob))
+        p.rot("hips", (30 + 1.5 * math.cos(4 * math.pi * phi), -2.5 * math.sin(2 * math.pi * (phi - 0.06)), -6 * c1))
+        rr = 0.0
+        for s, sx, off in (("L", 1.0, 0.0), ("R", -1.0, 0.5)):
+            y, z, pitch = foot((phi + off) % 1.0)
+            ball = B.rig.head[f"toe.{s}"] + V((0.025 * sx, -0.03 * kl + y, z))
+            rr = max(rr, plant_ball(B, p, s, ball, 6 * sx, pitch, splay=0.08))
+        B.spine(p, bend=33, twist=7 * c1)
+        p.rot("neck", (-10, 0, -1.0 * c1))
+        p.rot("head", (-12 + 1.0 * math.cos(4 * math.pi * phi), 0, 0))
+        # arms low at the sides, the right hand forward when the left leg is
+        sy = 0.065 * c1
+        GR = V((-0.255, -0.19 - sy, 0.44 * kl + bob))
+        TR = B.frame(GR, (-0.12, -0.99, 0.0), (-0.20, 0.10, -1.0))
+        r1, m1 = B.place_hand(p, "R", TR, pole=(-0.40, 0.90, -0.15))
+        B.curl(p, "R", 0.95)
+        GL = V((0.255, -0.21 + sy, 0.46 * kl + bob))
+        TL = B.grip_frame("L", GL, (0.05, -0.40, -0.92), (-0.90, 0.30, 0.0))
+        r2, m2 = B.place_hand(p, "L", TL, pole=(0.40, 0.90, -0.15))
+        B.curl(p, "L", 0.35)
+        return p, max(rr, r1, r2), max(m1, m2)
+    return fn, T, {}
+
+
+HIDE = {"crouch_idle": clip_crouch_idle, "sneak": clip_sneak}
+
+
+def hide_clip(B, name):
+    """-> (poses, meta) of a hiding clip; the creep is rotated to start where the LEFT foot is furthest forward (the footfall every gait starts on)."""
+    fn, T, ev = HIDE[name](B)
+    n = int(round(T * FPS))
+
+    def sample(k):
+        return [fn(T * ((f + k) % n) / n) for f in range(n + 1)]
+    res = sample(0)
+    if name == "sneak":
+        ys = [(r[0].head("toe.L") - r[0].head("toe.R")).y for r in res[:n]]
+        k = int(np.argmin(ys))
+        if k:
+            res = sample(k)
+    poses = [r[0] for r in res]
+    meta = {"weapon": "none", "speed": abs(stride_speed(B, poses)) if name == "sneak" else 0.0, "events": ev,
+            "reach": max(r[1] for r in res), "miss": max(r[2] for r in res)}
+    return poses, meta
+
+
+def hands_from_rig(arm):
+    """The hand frames curl() needs, read back from the grip bones of a finished rig (no hands.json needed): rig.run added tool_l / tool_r with
+    Y = the spread axis c and the roll toward the hand's axis a (a is perpendicular to c), and the palm normal is a x c turned to face the body."""
+    hands = {}
+    for side, sx, tb in (("L", 1.0, "tool_l"), ("R", -1.0, "tool_r")):
+        m = arm.data.bones[tb].matrix_local.to_3x3()
+        c, a = m.col[1].normalized(), m.col[2].normalized()
+        nrm = a.cross(c)
+        if nrm.x * (-sx) < 0:
+            nrm = -nrm
+        hands[side] = {"a": list(a), "n": list(nrm.normalized()), "c": list(c)}
+    return hands
 # which props a clip is shown with in the QA strips (the game decides by trade)
 SHOW = {"chop": ["Tool_ono"], "mine": ["Tool_tsuruhashi"], "hoe": ["Tool_kuwa"], "hammer": ["Tool_tsuchi"], "chisel": ["Tool_nomi", "Tool_tsuchi"], "saw": ["Tool_nokogiri"],
         "cut": ["Tool_kama"], "fish": ["Tool_tsurizao"], "craft": [], "walk_tool": ["Tool_kuwa"], "run_tool": ["Tool_ono"],
         "carry_shoulder_idle": ["Load_sack"], "carry_shoulder_walk": ["Load_log"], "carry_shoulder_run": ["Load_planks"],
-        "carry_front_idle": ["Load_basket"], "carry_front_walk": ["Load_basket"], "carry_front_run": ["Load_basket"], "idle": ["Hat_kasa"], "walk": ["Hat_kasa"], "run": []}
+        "carry_front_idle": ["Load_basket"], "carry_front_walk": ["Load_basket"], "carry_front_run": ["Load_basket"], "idle": ["Hat_kasa"], "walk": ["Hat_kasa"], "run": [],
+        "crouch_idle": ["Tool_kuwa", "Hat_kasa"], "sneak": ["Tool_ono"]}
+# the hiding clips are low: frame them closer, and add a view from above like the game's camera
+FRAMING = {"crouch_idle": dict(focus=(0.0, -0.10, 0.55), span=1.6, views=("side_r", "front", "rts")), "sneak": dict(focus=(0.0, -0.10, 0.62), span=1.75, views=("side_r", "front", "rts"))}
 
 
 # ---------------------------------------------------------------------------------------------------- out
@@ -712,17 +869,17 @@ def write_action(arm, name, poses, loop):
     return act
 
 
-def strip(B, low, objs, name, poses, out, show=(), n=8, size=440):
+def strip(B, low, objs, name, poses, out, show=(), n=8, size=440, views=("q", "side_r"), focus=(0.0, -0.15, 0.98), span=2.45):
     for o in objs.values():
         o.hide_render = True
     vis = [low] + [objs[k] for k in show if k in objs]
     paths = []
     idx = [int(round(i * (len(poses) - 1) / n)) for i in range(n)]
-    for view in ("q", "side_r"):
+    for view in views:
         for j, i in enumerate(idx):
             PO.show_pose(B.arm, poses[i])
             bpy.context.view_layer.update()
-            paths += qa.shots(vis, os.path.join(out, f"_{name}_{view}_{j}"), views=(view,), size=size, focus=(0.0, -0.15, 0.98), span=2.45)
+            paths += qa.shots(vis, os.path.join(out, f"_{name}_{view}_{j}"), views=(view,), size=size, focus=focus, span=span)
     sheet = os.path.join(out, f"clip_{name}.jpg")
     qa.sheet(paths, sheet, cols=n)
     for pth in paths:
@@ -759,7 +916,7 @@ def run(work, mocap_dir, only=None, cfg=None, log=print):
     def keep(name, poses, loop, meta):
         clips[name] = (poses, loop, meta)
 
-    need_mocap = want is None or any(not (w in WORK) for w in want)
+    need_mocap = want is None or any(not (w in WORK or w in HIDE) for w in want)
     if need_mocap:
         src = {k: load_mocap(os.path.join(mocap_dir, f)) for k, f in MOCAP.items() if k in ("idle", "walk", "run")}
         # ---- idle: the calmest stretch of the take, about five seconds
@@ -823,6 +980,11 @@ def run(work, mocap_dir, only=None, cfg=None, log=print):
             ends = [p.matrices()["tool_r"] @ V((0, P.HEAD_Z[tool], 0)) for p in poses]
             lowp = min(ends, key=lambda e: e.z)
             log(f"  {name}: working end lowest at ({lowp.x:+.2f}, {lowp.y:+.2f}, {lowp.z:+.2f}), highest z {max(e.z for e in ends):.2f}")
+    for name in HIDE:
+        if want is not None and name not in want:
+            continue
+        poses, meta = hide_clip(B, name)
+        keep(name, poses, True, meta)
     for name, (poses, loop, meta) in clips.items():
         if want is not None and name not in want:
             continue
@@ -830,7 +992,7 @@ def run(work, mocap_dir, only=None, cfg=None, log=print):
         report[name] = {"frames": len(poses) - 1, "speed_mps": round(meta.get("speed", 0.0), 3), "reach": round(meta.get("reach", 0.0), 3),
                         "miss_mm": round(meta.get("miss", 0.0) * 1000, 1), "toe_min_z": round(low_z, 3)}
         log(f"  clip {name}: " + json.dumps(report[name]))
-        strip(B, low, objs, name, poses, out, show=SHOW.get(name, []))
+        strip(B, low, objs, name, poses, out, show=SHOW.get(name, []), **FRAMING.get(name, {}))
     # ---- Actions
     for a in list(bpy.data.actions):
         bpy.data.actions.remove(a)
@@ -854,3 +1016,112 @@ def run(work, mocap_dir, only=None, cfg=None, log=print):
     if want is None:
         bpy.ops.wm.save_as_mainfile(filepath=os.path.join(work, "villager_anim.blend"), compress=True)
     return report
+
+
+# ---------------------------------------------------------------------------------------------------- clips added to a finished body
+def add_to_fixture(path, names, cfg, log=print):
+    """Write authored clips (HIDE) into a FINISHED body (fixtures/<name>.blend) and nothing else: meshes, textures and every other Action stay
+    exactly as they were, so a clip can be added without re-running the bake. Re-running replaces only the named clips. -> report."""
+    bpy.ops.wm.open_mainfile(filepath=path)
+    sc = bpy.context.scene
+    sc.render.fps = FPS
+    arm = bpy.data.objects["VillagerRig"]
+    B = Body(arm, hands_from_rig(arm), cfg)
+    log(f"  body: arm reach x{B.k:.3f}, leg x{B.kl:.3f} of the reference")
+    report = {}
+    for name in names:
+        poses, meta = hide_clip(B, name)
+        old = bpy.data.actions.get(name)
+        if old is not None:
+            bpy.data.actions.remove(old)
+        act = write_action(arm, name, poses, True)
+        act["gp_loop"] = 1
+        act["gp_weapon"] = meta["weapon"]
+        act["gp_weapon_end"] = meta["weapon"]
+        act["gp_events"] = json.dumps(meta.get("events", {}))
+        act["gp_fps"] = FPS
+        act["gp_speed"] = float(meta.get("speed", 0.0))
+        report[name] = {"frames": len(poses) - 1, "speed_mps": round(meta["speed"], 3), "reach": round(meta["reach"], 3), "miss_mm": round(meta["miss"] * 1000, 1)}
+        log(f"  clip {name}: " + json.dumps(report[name]))
+    arm.animation_data.action = None                          # the gate validates the rest pose (ANIM_ACTIVE)
+    for pb in arm.pose.bones:
+        pb.rotation_quaternion = (1, 0, 0, 0)
+        pb.location = (0, 0, 0)
+    bpy.context.view_layer.update()
+    bpy.context.preferences.filepaths.save_version = 0        # no .blend1 next to the fixture
+    bpy.ops.wm.save_as_mainfile(filepath=path, compress=True)
+    return report
+
+
+def measure_clip(name, act, log=None):
+    """what the hiding clips promise, measured on the SKINNED meshes of the open fixture at every frame of a stored Action."""
+    sc = bpy.context.scene
+    arm = bpy.data.objects["VillagerRig"]
+    low = bpy.data.objects["Villager_LOD0"]
+    tools = [o for o in bpy.data.objects if o.type == "MESH" and o.name.startswith("Tool_")]
+    hat = bpy.data.objects.get("Hat_kasa")
+
+    def zr(o):
+        ev = o.evaluated_get(bpy.context.evaluated_depsgraph_get())
+        me = ev.to_mesh()
+        co = np.empty(len(me.vertices) * 3)
+        me.vertices.foreach_get("co", co)
+        M = np.array(ev.matrix_world)
+        z = co.reshape(-1, 3) @ M[2, :3] + M[2, 3]
+        ev.to_mesh_clear()
+        return float(z.min()), float(z.max())
+    arm.animation_data.action = act
+    f0, f1 = (int(round(x)) for x in act.frame_range)
+    m = {"head_top": -9.0, "head_top_min": 9.0, "body_min": 9.0, "tool_max": -9.0, "tool_min": 9.0, "hat_top": -9.0, "toes": []}
+    for f in range(f0, f1 + 1):
+        sc.frame_set(f)
+        lo, hi = zr(low)
+        m["head_top"], m["head_top_min"], m["body_min"] = max(m["head_top"], hi), min(m["head_top_min"], hi), min(m["body_min"], lo)
+        for t in tools:
+            a, b = zr(t)
+            m["tool_max"], m["tool_min"] = max(m["tool_max"], b), min(m["tool_min"], a)
+        if hat is not None:
+            m["hat_top"] = max(m["hat_top"], zr(hat)[1])
+        M = arm.matrix_world
+        m["toes"].append({s: M @ arm.pose.bones[f"toe.{s}"].head for s in "LR"})
+    arm.animation_data.action = None
+    sc.frame_set(f0)
+    return m
+
+
+def qa_hide(names, out, body=None, log=print):
+    """contact sheets of the hiding clips as STORED in the open fixture (8 frames from the side, the front and an RTS camera, with the hat and a long
+    tool) and close-ups of the body alone (the jacket in a deep crouch). Changes render settings: never save after this."""
+    os.makedirs(out, exist_ok=True)
+    sc = bpy.context.scene
+    arm = bpy.data.objects["VillagerRig"]
+    low = bpy.data.objects["Villager_LOD0"]
+    body = body or os.path.splitext(os.path.basename(bpy.data.filepath))[0]
+    sheets = []
+    for name in names:
+        act = bpy.data.actions[name]
+        arm.animation_data.action = act
+        f0, f1 = (int(round(x)) for x in act.frame_range)
+        fr = FRAMING[name]
+        vis = [low] + [bpy.data.objects[k] for k in SHOW[name] if k in bpy.data.objects]
+        idx = [f0 + int(round(i * (f1 - f0) / 8)) for i in range(8)]
+        paths = []
+        for view in fr["views"]:
+            for j, f in enumerate(idx):
+                sc.frame_set(f)
+                paths += qa.shots(vis, os.path.join(out, f"_{body}_{name}_{view}_{j}"), views=(view,), size=400, focus=fr["focus"], span=fr["span"])
+        sheets.append(qa.sheet(paths, os.path.join(out, f"{body}_{name}.jpg"), cols=8))
+        cu = []
+        for f in (idx[0], idx[3], idx[5]):
+            sc.frame_set(f)
+            cu += qa.shots([low], os.path.join(out, f"_{body}_{name}_cu_{f}"), views=("front", "side", "q_back", "low"), size=520, focus=(0.0, -0.12, 0.55), span=1.05)
+        sheets.append(qa.sheet(cu, os.path.join(out, f"{body}_{name}_closeup.jpg"), cols=4))
+        for pth in paths + cu:
+            try:
+                os.remove(pth)
+            except OSError:
+                pass
+    arm.animation_data.action = None
+    sc.frame_set(1)
+    log("  QA " + ", ".join(sheets))
+    return sheets

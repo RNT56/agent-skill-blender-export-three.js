@@ -84,6 +84,12 @@
    },
    "craft": {
     "loop": true
+   },
+   "crouch_idle": {
+    "loop": true
+   },
+   "sneak": {
+    "loop": true
    }
   },
   "team_mask": "out/villager_unit_04_tex/villager_team.png"
@@ -113,7 +119,9 @@
    "saw",
    "cut",
    "fish",
-   "craft"
+   "craft",
+   "crouch_idle",
+   "sneak"
   ]
  },
  "export": {
