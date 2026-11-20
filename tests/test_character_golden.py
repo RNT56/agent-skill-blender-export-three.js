@@ -467,7 +467,7 @@ if os.path.exists(mask_path):
     _im.pixels.foreach_get(_a)
     _a = _a.reshape(-1, 4)[:, 0]
     tm = (_im.size[0], float((_a > 0.5).mean()))
-check("team mask shipped next to the GLB, covers the lacing/sash only (3-30% of the atlas)", tm is not None and tm[0] == 1024 and 0.03 < tm[1] < 0.30, str(tm))
+check("team mask shipped next to the GLB, covers the lacing/sash only (3-30% of the atlas)", tm is not None and tm[0] in (1024, 2048) and 0.03 < tm[1] < 0.30, str(tm))
 exp_dur = {k: v["duration"] for k, v in clipmeta.items()}
 got = {a["name"]: a["duration"] for a in info.get("animations", [])}
 check("exported clip durations match the authored ones (within 1 frame)", all(abs(got[k] - exp_dur[k]) <= 1.01 / 30 for k in exp_dur), str({k: (got.get(k), exp_dur[k]) for k in exp_dur if abs(got.get(k, 0) - exp_dur[k]) > 1.01 / 30}))

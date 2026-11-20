@@ -412,6 +412,50 @@ def sneak(t):
                     footL=feet["L"], footR=feet["R"], saya=SN_SAYA, handL=dict(LHAND_KOI), handR=hr, curl_L=0.75, curl_R=0.35))
 
 
+# ------------------------------------------------------------------------------------------------------------- variety (2026-11-20): <base>__<style> clips (view/anim/variety.js)
+RHAND_TSUKA = dict(pos=(0.110, -0.215, 1.115), dir=(0.20, -0.45, -0.87), hint=(0.85, 0.15, 0.50), pole=(-0.5, 0.8, -0.35))      # palm down over the pommel, fingers draped forward
+
+
+def idle_hilt(t):
+    """watchful: the right hand on the hilt, the weight on the right leg, the head turning slowly across the field"""
+    T = 10.0
+    ph = TAU * t / T
+    P = dict(
+        hips_pos=V(-0.016, 0.0, -0.016 + 0.003 * math.sin(ph * 2)),
+        hips_rot=(0.0, 0.0, -4.0 + 1.0 * math.sin(ph)),
+        spine=(2.0 + 0.8 * math.sin(ph * 2 + 0.6), 0.0, 3.0),
+        neck=(-1.0, 0.0, 20.0 * math.sin(ph)),
+        footL=dict(pos=V(0.150, 0.020, AZ), yaw=12.0),
+        footR=dict(pos=V(-0.130, -0.050, AZ), yaw=-16.0),
+        handL=LHAND_SAYA, handR=dict(RHAND_TSUKA), curl_L=0.5, curl_R=0.55,
+    )
+    return fix(P)
+
+
+def idle_easy(t):
+    """at rest: the right arm hanging loose, the weight on the left leg, a long breath and a look down and up"""
+    T = 9.0
+    ph = TAU * t / T
+    P = dict(
+        hips_pos=V(0.018, 0.0, -0.020 + 0.004 * math.sin(ph * 2)),
+        hips_rot=(0.0, 0.0, 4.0),
+        spine=(1.0 + 1.2 * math.sin(ph * 2 + 0.6), 0.0, -2.0),
+        neck=(6.0 * math.sin(ph) - 2.0, 0.0, -6.0),
+        footL=dict(pos=V(0.140, -0.040, AZ), yaw=14.0),
+        footR=dict(pos=V(-0.150, 0.030, AZ), yaw=-10.0),
+        handL=LHAND_SAYA, handR=dict(pos=(-0.300, 0.010, 0.880), pole=(-0.5, 0.6, -0.6)), curl_L=0.5, curl_R=0.30,
+    )
+    return fix(P)
+
+
+def walk_hilt(t):
+    """the march with the right hand on the hilt (the left steadies the scabbard): no arm swings"""
+    P = locomotion(t, WALK_G, 3.0, 0.20)
+    P["handR"] = dict(RHAND_TSUKA)
+    P["curl_R"] = 0.55
+    return fix(P)
+
+
 CLIPS = {
     "equip": dict(fn=equip, duration=EQUIP_T, loop=False, weapon="sheathed", events={"take": EQUIP_TAKE}),
     "idle": dict(fn=idle, duration=8.0, loop=True, weapon="sheathed"),
@@ -430,4 +474,7 @@ CLIPS = {
     "death": dict(fn=death, duration=1.25, loop=False, weapon="drawn"),
     "crouch_idle": dict(fn=crouch_idle, duration=5.0, loop=True, weapon="sheathed"),
     "sneak": dict(fn=sneak, duration=SNEAK_G["T"], loop=True, weapon="sheathed", speed=SNEAK_V),
+    "idle__hilt": dict(fn=idle_hilt, duration=10.0, loop=True, weapon="sheathed"),
+    "idle__easy": dict(fn=idle_easy, duration=9.0, loop=True, weapon="sheathed"),
+    "walk__hilt": dict(fn=walk_hilt, duration=WALK_G["T"], loop=True, weapon="sheathed", speed=WALK_V),
 }

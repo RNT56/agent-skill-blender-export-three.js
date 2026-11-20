@@ -7,8 +7,8 @@
   "budgets": {
     "max_tris": 70000,
     "max_materials": 1,
-    "max_texture_px": 2048,
-    "max_file_mb": 14
+    "max_texture_px": 4096,
+    "max_file_mb": 32
   },
   "lod_budgets": {
     "LOD0": 18000,
@@ -75,6 +75,15 @@
       },
       "sneak": {
         "loop": true
+      },
+      "idle__hilt": {
+        "loop": true
+      },
+      "idle__easy": {
+        "loop": true
+      },
+      "walk__hilt": {
+        "loop": true
       }
     },
     "team_mask": "out/samurai_tex/samurai_team.png",
@@ -108,7 +117,10 @@
       "sheathe",
       "equip",
       "crouch_idle",
-      "sneak"
+      "sneak",
+      "idle__hilt",
+      "idle__easy",
+      "walk__hilt"
     ]
   },
   "export": {

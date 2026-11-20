@@ -289,9 +289,10 @@ def hemp(name="sam_hemp", team=0.0):
     fold2 = b.math("SINE", b.math("ADD", b.math("MULTIPLY", u, 6.2832 / 0.021), b.math("MULTIPLY", b.noise(objv, 19.0, 3.0), 9.0)))
     hang = b.smoothstep(1.35, 0.55, oz)                                                # stronger toward the hem than at the shoulders
     crease = b.math("MULTIPLY", b.math("ADD", b.math("MULTIPLY", fold, 0.65), b.math("MULTIPLY", fold2, 0.22)), b.math("ADD", 0.35, b.math("MULTIPLY", hang, 0.65)))
-    col = b.mix(b.math("MULTIPLY", b.smoothstep(0.05, 0.85, b.math("SUBTRACT", 0.0, crease)), 0.62), col, (0.006, 0.009, 0.024, 1))    # valleys of the folds go dark, crests keep the dye
+    # valleys of the folds go darker, crests keep the dye (2026-11-20: 0.62 toward near-black read as hard stripes in the game: the bump does the folds)
+    col = b.mix(b.math("MULTIPLY", b.smoothstep(0.05, 0.85, b.math("SUBTRACT", 0.0, crease)), 0.34), col, (0.014, 0.020, 0.052, 1))
     weave_n = b.bump(b.math("ADD", b.math("MULTIPLY", weave, 0.5), b.math("MULTIPLY", slub, 0.3)), 0.9, 0.0016)
-    n = b.bump(crease, 2.2, 0.012, normal=weave_n)
+    n = b.bump(crease, 1.3, 0.012, normal=weave_n)
     return b.finish(col, b.math("ADD", 0.82, b.math("MULTIPLY", slub, 0.12)), 0.0, n, team=team)
 
 
