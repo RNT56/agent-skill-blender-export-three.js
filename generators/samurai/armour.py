@@ -473,6 +473,22 @@ def body_armour():
     return parts
 
 
+KAWA_MAT = {"lamellar": "kawa", "lacquer": "rawhide", "gold": "rawhide", "iron": "rawhide"}
+
+
+def kawa_armour():
+    """Kawa-zane yoroi (the node Armour_Kawa): the first age's armour, lamellar of lacquered rawhide scales laced with indigo and vermilion. Cuirass,
+    shoulder guards and skirt only: no thigh guards, greaves or sleeves, and no iron or gilding anywhere (the rims are hide), so it reads lighter than
+    the o-yoroi it shares its cut with."""
+    parts = []
+    for f in (do_parts, skirt_parts, sode_parts):
+        parts += f()
+    for p in parts:
+        p.name = "kawa_" + (p.name[6:] if p.name.startswith("armor_") else p.name)
+        p.mat = KAWA_MAT.get(p.mat, p.mat)
+    return parts
+
+
 def helmet():
     """kabuto and menpo (the node Helmet): an engine may leave it off"""
     return kabuto_parts() + menpo_parts()

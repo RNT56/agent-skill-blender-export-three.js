@@ -33,7 +33,8 @@ def placement(origin, axis, edge):
     return M
 
 
-def blade_part(name, bone, M):
+def blade_part(name, bone, M, blade=None, sori=0.013):
+    BLADE = blade or globals()["BLADE"]
     P = Part(name, "steel", bone=bone, sharp=50)
     P.push(M)
     n = 24
@@ -43,7 +44,7 @@ def blade_part(name, bone, M):
         y = TSUBA_Y + 0.020 + t * (BLADE - 0.020)
         w = lerp(0.0315, 0.0215, t)                         # width kasane/ha
         th = lerp(0.0068, 0.0042, t)                        # thickness
-        bow = 0.013 * 4 * t * (1 - t)                        # sori: the middle bows toward the edge
+        bow = sori * 4 * t * (1 - t)                         # sori: the middle bows toward the edge
         if t > 0.93:                                         # kissaki: the tip closes in
             k = (t - 0.93) / 0.07
             w *= 1 - 0.85 * k
@@ -79,29 +80,31 @@ def hilt_parts(prefix, bone, M):
     return parts
 
 
-def saya_parts(bone="weapon_hip"):
-    M = placement(HIP_ORIGIN, HIP_DIR, HIP_EDGE)
-    S = Part("katana_saya", "lacquer", bone=bone, sharp=50)
+def saya_parts(bone="weapon_hip", M=None, prefix="katana", length=0.735, sori=0.012, sageo=True, mat="lacquer", trim="gold"):
+    M = M or placement(HIP_ORIGIN, HIP_DIR, HIP_EDGE)
+    S = Part(f"{prefix}_saya", mat, bone=bone, sharp=50)
     S.push(M)
     n = 14
     rings = []
-    y0, y1 = TSUBA_Y + 0.006, TSUBA_Y + 0.006 + 0.735
+    y0, y1 = TSUBA_Y + 0.006, TSUBA_Y + 0.006 + length
     for i in range(n + 1):
         t = i / n
         y = lerp(y0, y1, t)
         w = lerp(0.0205, 0.0165, t)
         th = lerp(0.0125, 0.0105, t)
-        bow = 0.012 * 4 * t * (1 - t)
+        bow = sori * 4 * t * (1 - t)
         from .kit import ring
         rings.append(ring(V((bow, y, 0)), V((1, 0, 0)), V((0, 0, 1)), w, th, 12, 2.5))
     S.loft(rings, True, (True, True))
     S.pop()
-    G = Part("katana_saya_fittings", "gold", bone=bone)
+    G = Part(f"{prefix}_saya_fittings", trim, bone=bone)
     G.push(M)
     G.tube([V((0, y0 - 0.004, 0)), V((0, y0 + 0.020, 0))], lambda t: (0.0225, 0.0140), 12, (True, True))             # koiguchi
     G.tube([V((0, y1 - 0.030, 0)), V((0, y1 + 0.008, 0))], lambda t: (0.0172 - 0.004 * t, 0.0112 - 0.003 * t), 10, (True, True))  # kojiri
     G.box((0.016, TSUBA_Y + 0.12, 0.0), 0.004, 0.009, 0.0125)                                                         # kurikata knob
     G.pop()
+    if not sageo:
+        return [S, G]
     C = Part("katana_sageo", "lacing2", bone=bone, sharp=70)
     C.push(M)
     k0 = V((0.020, TSUBA_Y + 0.12, 0.0))

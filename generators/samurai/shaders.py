@@ -158,9 +158,11 @@ class NB:
 
 
 # ------------------------------------------------------------------------------------------------------------- materials
-def lamellar(name="sam_lamellar"):
+def lamellar(name="sam_lamellar", plate0=(0.022, 0.017, 0.015, 1), plate1=(0.040, 0.031, 0.027, 1), brushed=(0.085, 0.060, 0.045, 1), worn=(0.20, 0.15, 0.085, 1),
+             cord2=None, gloss=0.30):
     """Laced lamellar plates: dark brown-black lacquer with brushed highlights and worn edges, thin cords in the plate gaps, two narrow
     lacing bands per row with a raised knot on every other plate. Only the bands and knots feed the team mask (cords stay navy)."""
+    cord2 = cord2 or NAVY
     b = NB(name)
     uvv, u, v = b.uv()
     objv, oz = b.obj()
@@ -175,12 +177,12 @@ def lamellar(name="sam_lamellar"):
     knot = b.math("MULTIPLY", b.math("MULTIPLY", cord, band), b.math("SUBTRACT", 1.0, odd))
     n1 = b.noise(objv, 110.0, 5.0)
     streak = b.stretched(uvv, 0.15, 10.0, 16.0, 3.0)                              # brush strokes run along the row height
-    plate = b.mix(b.smoothstep(0.30, 0.70, n1), (0.022, 0.017, 0.015, 1), (0.040, 0.031, 0.027, 1))
-    plate = b.mix(b.math("MULTIPLY", b.smoothstep(0.66, 0.92, streak), 0.30), plate, (0.085, 0.060, 0.045, 1))
+    plate = b.mix(b.smoothstep(0.30, 0.70, n1), plate0, plate1)
+    plate = b.mix(b.math("MULTIPLY", b.smoothstep(0.66, 0.92, streak), 0.30), plate, brushed)
     wear = b.edge_wear(0.0018, 0.8)
-    plate = b.mix(b.math("MULTIPLY", wear, b.math("SUBTRACT", 1.0, cord)), plate, (0.20, 0.15, 0.085, 1))    # worn lacquer shows gold-brown metal
-    cord_col = b.mix(third, NAVY, CRIMSON)
-    band_col = b.mix(b.math("MODULO", b.math("FLOOR", b.math("MULTIPLY", u, 0.5)), 2.0), CRIMSON, NAVY)
+    plate = b.mix(b.math("MULTIPLY", wear, b.math("SUBTRACT", 1.0, cord)), plate, worn)    # worn lacquer shows gold-brown metal
+    cord_col = b.mix(third, cord2, CRIMSON)
+    band_col = b.mix(b.math("MODULO", b.math("FLOOR", b.math("MULTIPLY", u, 0.5)), 2.0), CRIMSON, cord2)
     col = b.mix(band, plate, band_col)
     col = b.mix(cord, col, cord_col)
     col = b.mix(knot, col, (0.34, 0.035, 0.045, 1))
@@ -193,22 +195,33 @@ def lamellar(name="sam_lamellar"):
                            b.math("MULTIPLY", b.math("MULTIPLY", braid, b.math("MAXIMUM", cord, band)), 0.10))))
     height = b.math("ADD", height, b.math("MULTIPLY", scratch, 0.05))
     n = b.bump(height, 1.4, 0.0016)
-    rough = b.math("ADD", b.mixf(b.math("MAXIMUM", cord, band), 0.30, 0.78), b.math("MULTIPLY", scratch, 0.14))
+    rough = b.math("ADD", b.mixf(b.math("MAXIMUM", cord, band), gloss, 0.78), b.math("MULTIPLY", scratch, 0.14))
     return b.finish(col, rough, 0.0, n, team=b.math("MAXIMUM", band, knot))
 
 
-def lacquer(name="sam_lacquer"):
+def kawa(name="sam_kawa"):
+    """Kawa-zane: scales of rawhide under brown lacquer (warmer, duller than the iron-backed lamellar, the hide showing tan where it is worn), laced in
+    rows with indigo and vermilion cord. No metal anywhere."""
+    return lamellar(name, plate0=(0.070, 0.032, 0.014, 1), plate1=(0.125, 0.060, 0.026, 1), brushed=(0.200, 0.105, 0.048, 1), worn=(0.42, 0.29, 0.15, 1), cord2=INDIGO, gloss=0.42)
+
+
+def rawhide(name="sam_rawhide"):
+    """plain lacquered hide (straps, edge bindings, the rims that are gilt on the great armour)"""
+    return lacquer(name, c0=(0.060, 0.028, 0.013, 1), c1=(0.110, 0.052, 0.024, 1), worn=(0.36, 0.25, 0.13, 1), gloss=0.36)
+
+
+def lacquer(name="sam_lacquer", c0=(0.020, 0.018, 0.020, 1), c1=(0.040, 0.036, 0.040, 1), worn=(0.12, 0.115, 0.11, 1), gloss=0.20):
     b = NB(name)
     objv, oz = b.obj()
     n1 = b.noise(objv, 160.0, 5.0)
     wear = b.edge_wear(0.0025, 1.3)
-    base = b.mix(b.smoothstep(0.35, 0.65, n1), (0.020, 0.018, 0.020, 1), (0.040, 0.036, 0.040, 1))
-    col = b.mix(b.math("MULTIPLY", wear, 0.85), base, (0.12, 0.115, 0.11, 1))
+    base = b.mix(b.smoothstep(0.35, 0.65, n1), c0, c1)
+    col = b.mix(b.math("MULTIPLY", wear, 0.85), base, worn)
     dust = b.math("MULTIPLY", b.smoothstep(0.55, 0.85, b.noise(objv, 12.0, 3.0)), b.smoothstep(1.3, 0.7, oz))
     col = b.mix(b.math("MULTIPLY", dust, 0.30), col, (0.07, 0.05, 0.035, 1))
     fine = b.noise(objv, 900.0, 2.0)
     n = b.bump(b.math("MULTIPLY", fine, 0.25), 0.6, 0.0012)
-    rough = b.math("ADD", 0.20, b.math("ADD", b.math("MULTIPLY", wear, 0.3), b.math("MULTIPLY", b.noise(objv, 40.0, 3.0), 0.22)))
+    rough = b.math("ADD", gloss, b.math("ADD", b.math("MULTIPLY", wear, 0.3), b.math("MULTIPLY", b.noise(objv, 40.0, 3.0), 0.22)))
     return b.finish(col, rough, 0.0, n)
 
 
@@ -432,7 +445,7 @@ def iris(name="sam_iris"):
 
 
 BUILDERS = {
-    "lamellar": lamellar, "lacquer": lacquer, "hemp": hemp, "gold": gold, "iron": iron, "steel": steel, "skin": skin,
+    "lamellar": lamellar, "kawa": kawa, "rawhide": rawhide, "lacquer": lacquer, "hemp": hemp, "gold": gold, "iron": iron, "steel": steel, "skin": skin,
     "hair": hair, "kabuto": kabuto, "menpo": menpo, "banner": banner, "straw": straw, "white": white, "teeth": teeth, "eye": eye, "iris": iris,
     "lacing": lambda: cord("sam_lacing", CRIMSON), "lacing2": lambda: cord("sam_lacing2", NAVY),
     "sash": lambda: hemp("sam_sash", team=0.9),

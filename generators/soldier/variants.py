@@ -24,7 +24,7 @@ UNITS = {
     # the archer: a lighter, younger man. His bow and arrow are the v1 archer's own (owner, 2026-11-19: "use the current archer's bow and arrow with the new
     # model"): taken from fixtures/archer_unit_01.blend with their bones; the quiver is a piece; the rawhide hat is the ashigaru's (the same good in the game).
     "archer": dict(
-        asset="archer_unit_02", height=1.74, base="bare", src_dir="fixtures/archer_src", tris=18000, weapon="bow", bow_from="fixtures/archer_unit_01.blend",
+        asset="archer_unit_02", height=1.74, base="bare", src_dir="fixtures/archer_src", tris=18000, weapon="bow", bow_from="fixtures/archer_unit_01.blend", banner_node=True,
         bodies={
             "bare": dict(src="tripo/bare_b_mv.glb", node="Archer_Bare", armour=None),
             "haramaki": dict(src="tripo/haramaki_b_mv.glb", node="Archer_Haramaki", armour="Haramaki", banner=True),

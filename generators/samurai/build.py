@@ -2,11 +2,11 @@
 import bpy
 from mathutils import Vector
 
-from . import armour, banner, body, katana as K, materials, rig, skin
+from . import armour, banner, body, katana as K, materials, rig, skin, tachi as T
 
 V = Vector
 
-GROUPS = (("banner_", "Sashimono"), ("katana_hand", "Katana_Drawn"), ("katana_hip", "Katana_Sheathed"), ("katana_saya", "Katana_Saya"), ("katana_sageo", "Katana_Saya"))
+GROUPS = (("tachi_hand", "Tachi_Drawn"), ("tachi_hip", "Tachi_Sheathed"), ("tachi_saya", "Tachi_Saya"), ("tachi_cords", "Tachi_Saya"), ("banner_", "Sashimono"), ("katana_hand", "Katana_Drawn"), ("katana_hip", "Katana_Sheathed"), ("katana_saya", "Katana_Saya"), ("katana_sageo", "Katana_Saya"))
 
 
 def clear_scene():
@@ -43,13 +43,13 @@ def build_model(stage="all", mat_fn=None, coll_name="samurai_LOD0", split_tails=
     head = AB.head_parts() + AB.hair_parts()
     soft_head = {id(p) for p in head}                      # skinned by the archer's rules (its neck turns inside the collar)
     parts = [p for p in body.all_soft(table) if p.name not in HEAD] + head
-    gear = {"Armour_Oyoroi": armour.body_armour(), "Helmet": armour.helmet()} if stage in ("armour", "all") else {}
+    gear = {"Armour_Oyoroi": armour.body_armour(), "Armour_Kawa": armour.kawa_armour(), "Helmet": armour.helmet()} if stage in ("armour", "all") else {}
     node_of = {id(p): name for name, ps in gear.items() for p in ps}
     for ps in gear.values():
         parts += ps
     go, gt = rig.grip_origin()
     M_hand = K.placement(go, gt, V((0, 0, -1)))
-    weapons = K.hip_katana() + K.saya_parts() + K.hand_katana(M_hand) + banner.banner_parts()
+    weapons = K.hip_katana() + K.saya_parts() + K.hand_katana(M_hand) + T.hip_tachi() + T.saya_parts() + T.hand_tachi(M_hand) + banner.banner_parts()
 
     objs, piece = [], {}
     for p in parts + weapons:

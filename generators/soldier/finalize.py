@@ -155,7 +155,8 @@ def run(cfg, work, A=None, rel=lambda p: p, log=print):
         body = bpy.data.objects[node]
         stem = node.split("_", 1)[1]                                   # Bare / HaraAte / Okegawa
         body.name = body.data.name = f"{U}_{stem}_LOD0"
-        banner = (kit["Sashimono"],) if cfg["bodies"][key].get("banner") and "Sashimono" in kit else ()
+        # (banner_node: the banner stays its own node at EVERY distance: only some of this unit's men carry one, e.g. one archer in five)
+        banner = (kit["Sashimono"],) if cfg["bodies"][key].get("banner") and "Sashimono" in kit and not cfg.get("banner_node") else ()
         l1 = SF.decimate_copy(body, f"{U}_{stem}_LOD1", LOD1_TRIS - sum(tris(b) for b in banner), arm, coll, extras=banner)
         SF.limit_influences(l1, 4)
         made[body.name], made[l1.name] = body, l1
