@@ -5,7 +5,7 @@
   "source_blend": "fixtures/samurai_unit.blend",
   "preview": false,
   "budgets": {
-    "max_tris": 66000,
+    "max_tris": 70000,
     "max_materials": 1,
     "max_texture_px": 2048,
     "max_file_mb": 14

@@ -43,7 +43,7 @@ def build_model(stage="all", mat_fn=None, coll_name="samurai_LOD0", split_tails=
     head = AB.head_parts() + AB.hair_parts()
     soft_head = {id(p) for p in head}                      # skinned by the archer's rules (its neck turns inside the collar)
     parts = [p for p in body.all_soft(table) if p.name not in HEAD] + head
-    gear = {"Armour_Oyoroi": armour.body_armour(), "Armour_Kawa": armour.kawa_armour(), "Helmet": armour.helmet()} if stage in ("armour", "all") else {}
+    gear = {"Armour_Oyoroi": armour.body_armour(), "Armour_Kawa": armour.kawa_armour(), "Helmet": armour.helmet(), "Helmet_Kawa": armour.kawa_helmet()} if stage in ("armour", "all") else {}
     node_of = {id(p): name for name, ps in gear.items() for p in ps}
     for ps in gear.values():
         parts += ps

@@ -4,6 +4,7 @@ cords tied to bands on the scabbard (the katana is thrust through the sash edge 
 The same local frame and the same hilt as the katana (katana.py), and the pommel hangs where the katana's sits at the hip, so every clip that takes the
 hand to the hilt (draw, sheathe, equip) meets it. Nodes: Tachi_Drawn (bone weapon_r), Tachi_Sheathed (the hilt at the hip, weapon_hip), Tachi_Saya
 (scabbard, its two hanger bands and the cords up to the sash, weapon_hip).
+Plain where the katana is fine: blackened iron fittings (no gold) and a greyer bloom-iron blade with a faint temper line.
 """
 from mathutils import Vector
 
@@ -23,11 +24,11 @@ def hip_matrix():
 
 
 def hand_tachi(M):
-    return [K.blade_part("tachi_hand_blade", "weapon_r", M, blade=BLADE, sori=SORI)] + K.hilt_parts("tachi_hand", "weapon_r", M)
+    return [K.blade_part("tachi_hand_blade", "weapon_r", M, blade=BLADE, sori=SORI, mat="bloom")] + K.hilt_parts("tachi_hand", "weapon_r", M, trim="iron")
 
 
 def hip_tachi():
-    return K.hilt_parts("tachi_hip", "weapon_hip", hip_matrix())
+    return K.hilt_parts("tachi_hip", "weapon_hip", hip_matrix(), trim="iron")
 
 
 def saya_parts():

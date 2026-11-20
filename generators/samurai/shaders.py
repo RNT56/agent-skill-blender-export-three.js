@@ -159,9 +159,12 @@ class NB:
 
 # ------------------------------------------------------------------------------------------------------------- materials
 def lamellar(name="sam_lamellar", plate0=(0.022, 0.017, 0.015, 1), plate1=(0.040, 0.031, 0.027, 1), brushed=(0.085, 0.060, 0.045, 1), worn=(0.20, 0.15, 0.085, 1),
-             cord2=None, gloss=0.30):
+             cord2=None, gloss=0.30, sugake=None):
     """Laced lamellar plates: dark brown-black lacquer with brushed highlights and worn edges, thin cords in the plate gaps, two narrow
-    lacing bands per row with a raised knot on every other plate. Only the bands and knots feed the team mask (cords stay navy)."""
+    lacing bands per row with a raised knot on every other plate. Only the bands and knots feed the team mask (cords stay navy).
+    `sugake` (a number of plates): the sparse lacing of plain armour instead (see sugake_lamellar)."""
+    if sugake:
+        return sugake_lamellar(name, plate0, plate1, brushed, worn, cord2 or NAVY, gloss, sugake)
     cord2 = cord2 or NAVY
     b = NB(name)
     uvv, u, v = b.uv()
@@ -199,18 +202,61 @@ def lamellar(name="sam_lamellar", plate0=(0.022, 0.017, 0.015, 1), plate1=(0.040
     return b.finish(col, rough, 0.0, n, team=b.math("MAXIMUM", band, knot))
 
 
+def sugake_lamellar(name, plate0, plate1, brushed, worn, cord2, gloss, every):
+    """Sugake odoshi, the plain way to lace scales: a PAIR of thongs runs down through every `every`-th plate gap and crosses the row edges there; between
+    the laced columns the scales simply butt, a dark seam, and the bare hide shows. Each scale has its own tone (they are cut and lacquered one by one),
+    the surface is matte with a fine grain. The thongs and their crossings feed the team mask (dyed in the house colour)."""
+    b = NB(name)
+    uvv, u, v = b.uv()
+    objv, oz = b.obj()
+    ui = b.math("ROUND", u)
+    d = b.math("ABSOLUTE", b.math("SUBTRACT", u, ui))                              # distance to the nearest plate edge (0..0.5)
+    laced = b.math("LESS_THAN", b.math("MODULO", ui, float(every)), 0.5)           # this gap carries a pair of thongs
+    pair = b.math("SUBTRACT", 1.0, b.smoothstep(0.040, 0.068, b.math("ABSOLUTE", b.math("SUBTRACT", d, 0.125))))
+    cord = b.math("MULTIPLY", pair, laced)
+    seam = b.math("MULTIPLY", b.math("SUBTRACT", 1.0, b.smoothstep(0.012, 0.040, d)), b.math("SUBTRACT", 1.0, laced))
+    fv = b.math("FRACT", v)
+    band_d = b.math("MINIMUM", fv, b.math("SUBTRACT", 1.0, fv))
+    bridge = b.math("MULTIPLY", b.math("SUBTRACT", 1.0, b.smoothstep(0.020, 0.045, band_d)),
+                    b.math("MULTIPLY", laced, b.math("SUBTRACT", 1.0, b.smoothstep(0.17, 0.21, d))))    # the thong crosses the row edge only at a laced gap
+    xyz = b.node("ShaderNodeCombineXYZ")                                           # one tone per scale
+    b.l.new(ui, xyz.inputs["X"])
+    b.l.new(b.math("FLOOR", v), xyz.inputs["Y"])
+    tone = b.noise(xyz.outputs["Vector"], 3.7, 1.0)
+    n1 = b.noise(objv, 90.0, 5.0)
+    plate = b.mix(b.smoothstep(0.25, 0.75, b.math("ADD", b.math("MULTIPLY", tone, 0.7), b.math("MULTIPLY", n1, 0.3))), plate0, plate1)
+    streak = b.stretched(uvv, 0.15, 10.0, 16.0, 3.0)
+    plate = b.mix(b.math("MULTIPLY", b.smoothstep(0.70, 0.95, streak), 0.20), plate, brushed)
+    wear = b.edge_wear(0.0020, 0.9)
+    plate = b.mix(b.math("MULTIPLY", wear, b.math("SUBTRACT", 1.0, cord)), plate, worn)               # scuffed edges show the pale hide
+    col = b.mix(b.math("MULTIPLY", seam, 0.85), plate, (0.016, 0.011, 0.008, 1))
+    lace = b.math("MAXIMUM", cord, bridge)
+    col = b.mix(lace, col, cord2)
+    scratch = b.stretched(uvv, 0.2, 14.0, 22.0, 3.0)
+    dust = b.math("MULTIPLY", b.smoothstep(0.50, 0.85, b.noise(objv, 14.0, 3.0)), b.smoothstep(1.2, 0.7, oz))
+    col = b.mix(b.math("MULTIPLY", dust, 0.35), col, (0.085, 0.068, 0.048, 1))
+    grain = b.noise(objv, 700.0, 2.0)
+    twist = b.math("SINE", b.math("MULTIPLY", v, 90.0))
+    height = b.math("ADD", b.math("MULTIPLY", lace, b.math("ADD", 0.45, b.math("MULTIPLY", twist, 0.08))),
+                    b.math("ADD", b.math("MULTIPLY", seam, -0.30), b.math("ADD", b.math("MULTIPLY", grain, 0.12), b.math("MULTIPLY", scratch, 0.06))))
+    n = b.bump(height, 1.3, 0.0016)
+    rough = b.math("ADD", b.mixf(lace, gloss, 0.80), b.math("MULTIPLY", scratch, 0.12))
+    return b.finish(col, rough, 0.0, n, team=lace)
+
+
 def kawa(name="sam_kawa"):
-    """Kawa-zane: scales of rawhide under brown lacquer (warmer, duller than the iron-backed lamellar, the hide showing tan where it is worn), laced in
-    rows with indigo and vermilion cord. No metal anywhere."""
-    return lamellar(name, plate0=(0.070, 0.032, 0.014, 1), plate1=(0.125, 0.060, 0.026, 1), brushed=(0.200, 0.105, 0.048, 1), worn=(0.42, 0.29, 0.15, 1), cord2=INDIGO, gloss=0.42)
+    """Kawa-zane: big scales of rawhide under a thin, dull brown lacquer (the hide showing pale where it is scuffed), each scale its own tone, laced sparsely
+    (sugake: a pair of thongs every third gap). Plainer, rougher and less saturated than the great armour's iron-backed lamellar. No metal anywhere."""
+    return lamellar(name, plate0=(0.040, 0.027, 0.016, 1), plate1=(0.082, 0.056, 0.033, 1), brushed=(0.096, 0.068, 0.042, 1), worn=(0.25, 0.19, 0.115, 1),
+                    cord2=INDIGO, gloss=0.60, sugake=3)
 
 
 def rawhide(name="sam_rawhide"):
-    """plain lacquered hide (straps, edge bindings, the rims that are gilt on the great armour)"""
-    return lacquer(name, c0=(0.060, 0.028, 0.013, 1), c1=(0.110, 0.052, 0.024, 1), worn=(0.36, 0.25, 0.13, 1), gloss=0.36)
+    """plain lacquered hide (straps, the breast plate, the tachi's scabbard): dull and rough, the same brown as the scales"""
+    return lacquer(name, c0=(0.050, 0.034, 0.021, 1), c1=(0.074, 0.051, 0.031, 1), worn=(0.24, 0.18, 0.11, 1), gloss=0.55, dust_col=(0.105, 0.088, 0.068, 1), dusty=0.22)
 
 
-def lacquer(name="sam_lacquer", c0=(0.020, 0.018, 0.020, 1), c1=(0.040, 0.036, 0.040, 1), worn=(0.12, 0.115, 0.11, 1), gloss=0.20):
+def lacquer(name="sam_lacquer", c0=(0.020, 0.018, 0.020, 1), c1=(0.040, 0.036, 0.040, 1), worn=(0.12, 0.115, 0.11, 1), gloss=0.20, dust_col=(0.07, 0.05, 0.035, 1), dusty=0.30):
     b = NB(name)
     objv, oz = b.obj()
     n1 = b.noise(objv, 160.0, 5.0)
@@ -218,7 +264,7 @@ def lacquer(name="sam_lacquer", c0=(0.020, 0.018, 0.020, 1), c1=(0.040, 0.036, 0
     base = b.mix(b.smoothstep(0.35, 0.65, n1), c0, c1)
     col = b.mix(b.math("MULTIPLY", wear, 0.85), base, worn)
     dust = b.math("MULTIPLY", b.smoothstep(0.55, 0.85, b.noise(objv, 12.0, 3.0)), b.smoothstep(1.3, 0.7, oz))
-    col = b.mix(b.math("MULTIPLY", dust, 0.30), col, (0.07, 0.05, 0.035, 1))
+    col = b.mix(b.math("MULTIPLY", dust, dusty), col, dust_col)
     fine = b.noise(objv, 900.0, 2.0)
     n = b.bump(b.math("MULTIPLY", fine, 0.25), 0.6, 0.0012)
     rough = b.math("ADD", gloss, b.math("ADD", b.math("MULTIPLY", wear, 0.3), b.math("MULTIPLY", b.noise(objv, 40.0, 3.0), 0.22)))
@@ -357,19 +403,22 @@ def iron(name="sam_iron"):
     return b.finish(col, b.math("ADD", 0.38, b.math("MULTIPLY", n1, 0.3)), b.math("SUBTRACT", 1.0, b.math("MULTIPLY", rust, 0.8)), n)
 
 
-def steel(name="sam_steel"):
+def steel(name="sam_steel", body=(0.58, 0.60, 0.65, 1), hard=(0.80, 0.81, 0.84, 1), dark=(0.35, 0.37, 0.40, 1), soft=0.0006, gloss=0.16, grain=0.12):
     b = NB(name)
     uvv, u, v = b.uv()
     objv, oz = b.obj()
     nz = b.stretched(uvv, 1.0, 0.02, 600.0, 3.0)                                     # grain along the blade
     hamon_edge = b.math("ADD", 0.0058, b.math("MULTIPLY", b.noise(objv, 38.0, 3.0), 0.0035))
-    hamon = b.smoothstep(b.math("ADD", hamon_edge, 0.0006), b.math("SUBTRACT", hamon_edge, 0.0006), u)
-    body = (0.58, 0.60, 0.65, 1)
-    hard = (0.80, 0.81, 0.84, 1)
+    hamon = b.smoothstep(b.math("ADD", hamon_edge, soft), b.math("SUBTRACT", hamon_edge, soft), u)
     col = b.mix(hamon, body, hard)
-    col = b.mix(b.math("MULTIPLY", nz, 0.12), col, (0.35, 0.37, 0.40, 1))
+    col = b.mix(b.math("MULTIPLY", nz, grain), col, dark)
     n = b.bump(b.math("MULTIPLY", nz, 0.25), 0.3, 0.0005)
-    return b.finish(col, b.math("ADD", 0.16, b.math("ADD", b.math("MULTIPLY", nz, 0.14), b.math("MULTIPLY", hamon, -0.06))), 1.0, n)
+    return b.finish(col, b.math("ADD", gloss, b.math("ADD", b.math("MULTIPLY", nz, 0.14), b.math("MULTIPLY", hamon, -0.06))), 1.0, n)
+
+
+def bloom(name="sam_bloom"):
+    """the tachi's bloom iron: a greyer, less polished blade with a soft, faint temper line and more visible grain (the katana's jewel steel is bright)"""
+    return steel(name, body=(0.44, 0.45, 0.47, 1), hard=(0.56, 0.57, 0.59, 1), dark=(0.26, 0.265, 0.27, 1), soft=0.0016, gloss=0.27, grain=0.22)
 
 
 def skin(name="sam_skin"):
@@ -445,7 +494,7 @@ def iris(name="sam_iris"):
 
 
 BUILDERS = {
-    "lamellar": lamellar, "kawa": kawa, "rawhide": rawhide, "lacquer": lacquer, "hemp": hemp, "gold": gold, "iron": iron, "steel": steel, "skin": skin,
+    "lamellar": lamellar, "kawa": kawa, "rawhide": rawhide, "lacquer": lacquer, "hemp": hemp, "gold": gold, "iron": iron, "steel": steel, "bloom": bloom, "skin": skin,
     "hair": hair, "kabuto": kabuto, "menpo": menpo, "banner": banner, "straw": straw, "white": white, "teeth": teeth, "eye": eye, "iris": iris,
     "lacing": lambda: cord("sam_lacing", CRIMSON), "lacing2": lambda: cord("sam_lacing2", NAVY),
     "sash": lambda: hemp("sam_sash", team=0.9),

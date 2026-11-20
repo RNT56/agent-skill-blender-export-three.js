@@ -18,7 +18,7 @@ def arg(name, default=None):
     return argv[argv.index(name) + 1] if name in argv else default
 
 
-NODES = ("body", "Armour_Oyoroi", "Armour_Kawa", "Helmet", "Katana_Drawn", "Katana_Sheathed", "Katana_Saya", "Tachi_Drawn", "Tachi_Sheathed", "Tachi_Saya", "Sashimono")
+NODES = ("body", "Armour_Oyoroi", "Armour_Kawa", "Helmet", "Helmet_Kawa", "Katana_Drawn", "Katana_Sheathed", "Katana_Saya", "Tachi_Drawn", "Tachi_Sheathed", "Tachi_Saya", "Sashimono")
 
 
 def main():
@@ -75,15 +75,22 @@ def main():
         far = (arm_ob, m["Katana_Saya"], m["Katana_Sheathed"], m["Sashimono"])
         finalize.decimate_copy(body_ob, "Samurai_LOD2", lod_tris[2], arm, game, extras=far + (helm,))
         finalize.decimate_copy(body_ob, "Samurai_Far_Bare", lod_tris[2], arm, game, extras=far)
-        # the rawhide lamellar follows the great armour's scheme: its own low mesh (the banner in it), and far away ONE mesh with or without the helmet
+        # the rawhide lamellar follows the great armour's scheme: its own low mesh (the banner in it), and far away ONE mesh per helmet. A man in it is a
+        # first-age man, so its far meshes carry the tachi (a sliver at that range either way)
         kawa = m["Armour_Kawa"]
-        finalize.decimate_copy(kawa, "Armour_Kawa_Low", 2600, arm, game, extras=(m["Sashimono"],))
-        kfar = (kawa, m["Katana_Saya"], m["Katana_Sheathed"], m["Sashimono"])
+        finalize.decimate_copy(kawa, "Armour_Kawa_Low", 1600, arm, game, extras=(m["Sashimono"],))
+        kfar = (kawa, m["Tachi_Saya"], m["Tachi_Sheathed"], m["Sashimono"])
         finalize.decimate_copy(body_ob, "Samurai_Far_Kawa_Kabuto", lod_tris[2], arm, game, extras=kfar + (helm,))
         finalize.decimate_copy(body_ob, "Samurai_Far_Kawa_Bare", lod_tris[2], arm, game, extras=kfar)
         robe = (m["Katana_Saya"], m["Katana_Sheathed"])
         finalize.decimate_copy(body_ob, "Samurai_Far_Robe_Kabuto", 1800, arm, game, extras=robe + (helm,))
         finalize.decimate_copy(body_ob, "Samurai_Far_Robe_Bare", 1600, arm, game, extras=robe)
+        # the first age's rawhide helmet (Helmet_Kawa): its low mesh, and its far mesh with each armour and with the robe ("KawaKabuto" in the name)
+        hk = m["Helmet_Kawa"]
+        finalize.decimate_copy(hk, "Helmet_Kawa_Low", 900, arm, game)
+        finalize.decimate_copy(body_ob, "Samurai_Far_Oyoroi_KawaKabuto", lod_tris[2], arm, game, extras=far + (hk,))
+        finalize.decimate_copy(body_ob, "Samurai_Far_Kawa_KawaKabuto", lod_tris[2], arm, game, extras=kfar + (hk,))
+        finalize.decimate_copy(body_ob, "Samurai_Far_Robe_KawaKabuto", 1800, arm, game, extras=robe + (hk,))
         for o in game.objects:
             if o.type == "MESH":
                 n, bad, mx = finalize.weight_report(o)

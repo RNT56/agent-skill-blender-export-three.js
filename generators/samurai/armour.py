@@ -57,17 +57,19 @@ def do_arcs(full):
     return [(180.0 + ARMHOLE, 360.0 - ARMHOLE), (ARMHOLE, 180.0 - ARMHOLE)]
 
 
-def do_parts():
+def do_parts(top=1.402, rows=7, plates=32, plain_rows=2, relief=0.0028, thick=0.006, trim=True, strap=(0.027, 0.0065), buckles=True):
+    """The cuirass: `rows` laced tiers from `top` down to the waist (the first `plain_rows` are the smooth breast plate), `plates` plate units around
+    the full ring, gilt edge strips (`trim`), and the shoulder straps (`strap`: width, thickness) with their buckles. Defaults: the o-yoroi."""
     parts = []
-    N, top, rows = 32, 1.402, 7
+    N = plates
     h = (top - 1.10) / rows
     for r in range(rows):
         z0, z1 = top - r * h, top - (r + 1) * h
         off = 0.016 + 0.0022 * r
         full = (z0 + z1) / 2 < 1.20
         for k, (a0, a1) in enumerate(do_arcs(full)):
-            P = Part(f"armor_do_{r}_{k}", "lamellar" if r >= 2 else "lacquer", bone=row_bone((z0 + z1) / 2))
-            smooth = r < 2
+            P = Part(f"armor_do_{r}_{k}", "lamellar" if r >= plain_rows else "lacquer", bone=row_bone((z0 + z1) / 2))
+            smooth = r < plain_rows
             n = max(2, round((48 if smooth else N) * (a1 - a0) / 360.0))
 
             def fn(s, v, off=off, a0=a0, a1=a1, n=n):
@@ -80,10 +82,10 @@ def do_parts():
             if smooth:
                 P.strip(param_surf(fn, inside=TORSO_AX), n, z0, z1, nv=1, relief=0.0, thick=0.006, groove=None, closed=closed, row=r)
             else:
-                P.strip(param_surf(fn, inside=TORSO_AX), n, z0, z1, nv=1, relief=0.0028, thick=0.006, groove=0.15, closed=closed, row=r)
+                P.strip(param_surf(fn, inside=TORSO_AX), n, z0, z1, nv=1, relief=relief, thick=thick, groove=0.15, closed=closed, row=r)
             parts.append(P)
     # gold trim top (arcs) and bottom (ring)
-    for tag, zc, off, full in (("top", 1.402, 0.0185, False), ("bot", 1.10, 0.0185 + 0.0022 * 6, True)):
+    for tag, zc, off, full in (("top", top, 0.0185, False), ("bot", 1.10, 0.0185 + 0.0022 * (rows - 1), True)) if trim else ():
         for k, (a0, a1) in enumerate(do_arcs(full)):
             G = Part(f"armor_do_trim_{tag}_{k}", "gold", bone=row_bone(zc + (0.02 if tag == "top" else -0.02)))
             n = max(2, round(48 * (a1 - a0) / 360.0))
@@ -104,8 +106,10 @@ def do_parts():
         by = torso_at(1.34)[1] + 0.040
         pts = [V((xs * sx, -0.004 - fy, 1.33)), V((xs * sx, -0.004 - fy * 0.72, 1.440)), V((xs * sx, -0.004, 1.497)),
                V((xs * sx, -0.004 + by * 0.72, 1.440)), V((xs * sx, -0.004 + by, 1.33))]
-        S.tube(catmull(pts, 4), lambda t: (0.027, 0.0065, 4.0), 8, (True, True))
+        S.tube(catmull(pts, 4), lambda t: (strap[0], strap[1], 4.0), 8, (True, True))
         parts.append(S)
+        if not buckles:
+            continue
         B = Part(f"armor_buckle_{sd}", "gold", bone="chest")
         B.box((xs * sx, -0.004 - fy - 0.004, 1.33), 0.020, 0.0045, 0.022)
         B.box((xs * sx, -0.004 + by + 0.004, 1.33), 0.020, 0.0045, 0.022)
@@ -114,30 +118,32 @@ def do_parts():
 
 
 # ------------------------------------------------------------------------------------------------------------- kusazuri
-def skirt_parts():
+def skirt_parts(tiers=4, plates=5, flare=0.130, half=21.0, relief=0.0026, thick=0.0045):
+    """Kusazuri: eight hanging panels (`half`: half their width in degrees) of `tiers` laced tiers, `plates` plate units across, spreading by `flare`
+    over 0.30 m of drop. Defaults: the o-yoroi."""
     parts = []
     centers = (-67.5, -22.5, 22.5, 67.5)
     bones = ("skirt_front", "skirt_side", "skirt_side", "skirt_back")
     for sd in ("L", "R"):
         for pi, (c, b) in enumerate(zip(centers, bones)):
-            a0, a1 = math.radians(c - 21.0), math.radians(c + 21.0)
-            for tier in range(4):
+            a0, a1 = math.radians(c - half), math.radians(c + half)
+            for tier in range(tiers):
                 z0 = 0.979 - tier * 0.060
                 z1 = z0 - 0.066
                 off = 0.018 + 0.0045 * tier
                 P = Part(f"armor_skirt_{sd}{pi}_{tier}", "lamellar", bone=f"{b}.{sd}")
 
                 def fn(s, v, off=off, a0=a0, a1=a1):
-                    a = lerp(a0, a1, s / 5.0)
+                    a = lerp(a0, a1, s / plates)
                     f = (0.979 - v) / 0.30
-                    rx = 0.170 + 0.130 * f + off
+                    rx = 0.170 + flare * f + off
                     ry = 0.126 + 0.010 * f + off
                     x, y = sup(a, rx, ry, 2.4)
                     return V((x, -0.004 + y, v))
 
                 if sd == "R":
                     P.push(MIRROR_X)
-                P.strip(param_surf(fn, inside=TORSO_AX), 5, z0, z1, nv=1, relief=0.0026, thick=0.0045, groove=0.15, row=tier + 8 * (1 if c < 0 else 0))
+                P.strip(param_surf(fn, inside=TORSO_AX), plates, z0, z1, nv=1, relief=relief, thick=thick, groove=0.15, row=tier + 8 * (1 if c < 0 else 0))
                 if sd == "R":
                     P.pop()
                 parts.append(P)
@@ -257,10 +263,11 @@ def kote_parts():
 
 
 # ------------------------------------------------------------------------------------------------------------- sode
-def sode_parts():
-    """Shoulder guards: six laced tiers hanging as a shell AROUND the upper-arm axis (so they clear the sleeve by construction)."""
+def sode_parts(tiers=6, H=0.275, plates=7, wrap=108.0, arch=10.0, relief=0.0028, thick=0.0045, trim=True):
+    """Shoulder guards: `tiers` laced tiers hanging as a shell AROUND the upper-arm axis (so they clear the sleeve by construction), `H` metres long,
+    wrapping +-`wrap` degrees round the arm (+`arch` more where the first tier arches over the shoulder), with a gilt lower edge (`trim`).
+    Defaults: the o-yoroi's great sode."""
     parts = []
-    tiers = 6
     sh, el, wr, tip, d = R._arm_points()
     for sd, sx in (("L", 1.0), ("R", -1.0)):
         S0 = V((sh.x * sx, sh.y, sh.z))
@@ -269,7 +276,6 @@ def sode_parts():
         out = V((sx, 0.0, 0.0))
         ex = (out - axis * out.dot(axis)).normalized()
         ey = axis.cross(ex).normalized()
-        H = 0.275
 
         def sleeve_r(pos):
             return lerp(0.074, 0.060, min(max(pos / 0.29, 0.0), 1.0))
@@ -277,7 +283,7 @@ def sode_parts():
         def shell(s, v, k=0, plates=7, extra=0.0):
             pos = -0.035 + v * H
             top = 1 - min(max(v, 0.0) * 3.0, 1.0)                    # the first tier arches over the shoulder
-            phi = math.radians(lerp(-108.0 - 10.0 * top, 108.0 + 10.0 * top, s / plates))
+            phi = math.radians(lerp(-wrap - arch * top, wrap + arch * top, s / plates))
             r = sleeve_r(max(pos, 0.0)) + 0.022 + 0.020 * v + 0.0035 * k + extra
             c = S0 + axis * pos
             return c + ex * (math.cos(phi) * r) + ey * (math.sin(phi) * r * 1.22) + V((0, 0, 0.010 * top))
@@ -286,9 +292,11 @@ def sode_parts():
         for k in range(tiers):
             v0, v1 = k / tiers, (k + 1) / tiers + 0.025
             P = Part(f"armor_sode_{sd}_{k}", "lamellar", bone=f"sode.{sd}")
-            P.strip(param_surf(lambda s, v, k=k: shell(s, v, k), inside=inside_axis), 7, v0, v1, nv=1, relief=0.0028, thick=0.0045,
+            P.strip(param_surf(lambda s, v, k=k: shell(s, v, k, plates), inside=inside_axis), plates, v0, v1, nv=1, relief=relief, thick=thick,
                     groove=0.15, row=30 + k)
             parts.append(P)
+        if not trim:
+            continue
         G = Part(f"armor_sode_trim_{sd}", "gold", bone=f"sode.{sd}")
         G.strip(param_surf(lambda s, v: shell(s, 1.0 + v * 0.0, 5, 14, 0.006) + V((0, 0, -0.0)) + axis * (v * 1.0), inside=inside_axis),
                 14, -0.007, 0.007, nv=1, relief=0.0, thick=0.004, groove=None)
@@ -476,13 +484,18 @@ def body_armour():
 KAWA_MAT = {"lamellar": "kawa", "lacquer": "rawhide", "gold": "rawhide", "iron": "rawhide"}
 
 
+# the rawhide lamellar's own cut: everything smaller, coarser and plainer than the great armour, so the line reads as an upgrade at any distance
+KAWA_DO = dict(top=1.372, rows=5, plates=24, plain_rows=1, relief=0.0018, thick=0.0045, trim=False, strap=(0.017, 0.0045), buckles=False)
+KAWA_SKIRT = dict(tiers=3, plates=4, flare=0.090, relief=0.0018, thick=0.0040)
+KAWA_SODE = dict(tiers=3, H=0.150, plates=5, wrap=80.0, arch=0.0, relief=0.0018, thick=0.0040, trim=False)
+
+
 def kawa_armour():
-    """Kawa-zane yoroi (the node Armour_Kawa): the first age's armour, lamellar of lacquered rawhide scales laced with indigo and vermilion. Cuirass,
-    shoulder guards and skirt only: no thigh guards, greaves or sleeves, and no iron or gilding anywhere (the rims are hide), so it reads lighter than
-    the o-yoroi it shares its cut with."""
-    parts = []
-    for f in (do_parts, skirt_parts, sode_parts):
-        parts += f()
+    """Kawa-zane yoroi (the node Armour_Kawa): the first age's armour, lamellar of big rawhide scales, laced sparsely (sugake) with leather thong.
+    Lower and coarser than the o-yoroi: a five-row dō of wider scales whose top stops under the collarbone, narrow hide shoulder straps without
+    buckles, small three-tier shoulder guards that hug the arm (not the great sode's boxes), a three-tier skirt that ends a hand higher and flares
+    less; no thigh guards, greaves or sleeves, and no iron or gilding anywhere (no edge trims at all)."""
+    parts = do_parts(**KAWA_DO) + skirt_parts(**KAWA_SKIRT) + sode_parts(**KAWA_SODE)
     for p in parts:
         p.name = "kawa_" + (p.name[6:] if p.name.startswith("armor_") else p.name)
         p.mat = KAWA_MAT.get(p.mat, p.mat)
@@ -492,6 +505,95 @@ def kawa_armour():
 def helmet():
     """kabuto and menpo (the node Helmet): an engine may leave it off"""
     return kabuto_parts() + menpo_parts()
+
+
+# the rawhide helmet's neck guard: three tiers that flare less than the kabuto's five
+KH_TIERS, KH_FX, KH_FY = 3, 0.085, 0.045
+
+
+def kawa_helmet():
+    """Kawa kabuto (the node Helmet_Kawa): the first age's helmet, to go with the rawhide lamellar. The iron kabuto's bowl shape (so it covers the tied
+    hair the same way) but of sixteen broad plates of lacquered hide with shallow seams, a hide rim and a hide knob at the crown, a three-tier neck guard
+    of sparsely laced hide scales, a small plain visor and a chin cord tied under the jaw. No crest, no turned-back wings, no mask, no gilding."""
+    parts = []
+    zt = 1.795
+    B = Part("kawahelm_bowl", "rawhide", bone="head")
+
+    def fb(s, v):
+        a = -math.pi / 2 + (s - 0.5) / 16 * math.tau
+        phi = v * (math.pi / 2) * 0.93
+        k = math.cos(phi)
+        x, y = sup(a, 0.094 * k, 0.114 * k, 2.15)
+        return V((x, HB_CY + y, HB_Z + (zt - HB_Z) * math.sin(phi)))
+
+    B.strip(param_surf(fb, inside=HEAD_AX), 16, 0.0, 1.0, nv=6, relief=0.0022, thick=0.006, groove=0.10)
+    parts.append(B)
+    C = Part("kawahelm_knob", "rawhide", bone="head")
+    C.cyl((0, HB_CY, zt - 0.006), (0, HB_CY, zt + 0.008), 0.024, 0.017, 12)
+    parts.append(C)
+    R_ = Part("kawahelm_rim", "rawhide", bone="head")
+
+    def fr(s, v):
+        a = -math.pi / 2 + (s - 0.5) / 48 * math.tau
+        x, y = sup(a, 0.0980, 0.1190, 2.15)
+        return V((x, HB_CY + y, v))
+
+    R_.strip(param_surf(fr, inside=HEAD_AX), 48, HB_Z - 0.007, HB_Z + 0.005, nv=1, relief=0.0, thick=0.005, groove=None, closed=True)
+    parts.append(R_)
+
+    for tier in range(KH_TIERS):
+        P = Part(f"kawahelm_shikoro_{tier}", "kawa", bone="head")
+        z0 = HB_Z - 0.004 - tier * 0.031
+        z1 = z0 - 0.035
+
+        def fs(s, v, tier=tier):
+            a = math.radians(lerp(-48.0, 228.0, s / 16.0))
+            f = (HB_Z - v) / 0.17
+            rx = 0.100 + KH_FX * f + 0.003 * tier
+            ry = 0.118 + KH_FY * f + 0.003 * tier
+            x, y = sup(a, rx, ry, 2.3)
+            return V((x, HB_CY + 0.012 * f + y, v))
+
+        P.strip(param_surf(fs, inside=HEAD_AX), 16, z0, z1, nv=1, relief=0.0020, thick=0.0040, groove=0.15, row=40 + tier)
+        parts.append(P)
+    bottom = HB_Z - 0.004 - (KH_TIERS - 1) * 0.031 - 0.035
+    Lg = Part("kawahelm_lining", "hemp", bone="head", sharp=60)
+
+    def fl(s, t):
+        v = lerp(HB_Z - 0.004, bottom + 0.002, t)
+        a = math.radians(lerp(-48.0, 228.0, s))
+        f = (HB_Z - v) / 0.17
+        rx = 0.100 + KH_FX * f + 0.006 - 0.0110
+        ry = 0.118 + KH_FY * f + 0.006 - 0.0110
+        x, y = sup(a, rx, ry, 2.3)
+        return V((x, HB_CY + 0.012 * f + y, v))
+
+    Lg.slab(param_surf(fl, inside=lambda p: p + (p - V((0.0, HB_CY, p.z))) * 5.0), 12, 3, 0.003, uvf=lambda u, v: (u * 0.7, v * (HB_Z - bottom)))
+    parts.append(Lg)
+
+    Vz = Part("kawahelm_visor", "rawhide", bone="head")
+
+    def fv(a, b):
+        ang = math.radians(lerp(-128.0, -52.0, a))
+        x, y = sup(ang, 0.099 + 0.017 * b, 0.120 + 0.021 * b, 2.2)
+        return V((x, HB_CY + y, HB_Z + 0.014 - 0.011 * b))                 # a short peak that slopes down over the brow, not a shelf
+
+    Vz.slab(param_surf(fv, inside=HEAD_AX), 8, 2, 0.0055, chamfer=0.05)
+    parts.append(Vz)
+
+    # the chin cord (shinobi-no-o): from inside the rim at each temple, down past the cheek and the jaw, tied under the chin, the ends hanging
+    Cd = Part("kawahelm_cord", "lacing2", bone="head", sharp=70)
+    knot = V((0.0, -0.079, 1.512))
+    for sx in (1.0, -1.0):
+        path = [V((0.093 * sx, HB_CY - 0.010, HB_Z - 0.006)), V((0.083 * sx, -0.032, 1.600)), V((0.068 * sx, -0.058, 1.556)),
+                V((0.036 * sx, -0.076, 1.520)), knot + V((0.004 * sx, 0.0, 0.0))]
+        Cd.tube(catmull(path, 4), lambda t: (0.0034, 0.0034), 6, (True, True))
+    Cd.tube([knot + V((-0.007, 0, 0)), knot + V((0.007, 0, 0))], lambda t: (0.0062, 0.0055), 8, (True, True))
+    for sx in (1.0, -1.0):
+        Cd.tube(catmull([knot + V((0.003 * sx, -0.002, -0.003)), knot + V((0.008 * sx, -0.010, -0.030)), knot + V((0.011 * sx, -0.012, -0.058))], 3),
+                lambda t: (0.0030, 0.0026), 6, (True, True))
+    parts.append(Cd)
+    return parts
 
 
 def all_armour(table):

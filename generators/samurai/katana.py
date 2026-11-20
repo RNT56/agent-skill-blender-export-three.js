@@ -33,9 +33,9 @@ def placement(origin, axis, edge):
     return M
 
 
-def blade_part(name, bone, M, blade=None, sori=0.013):
+def blade_part(name, bone, M, blade=None, sori=0.013, mat="steel"):
     BLADE = blade or globals()["BLADE"]
-    P = Part(name, "steel", bone=bone, sharp=50)
+    P = Part(name, mat, bone=bone, sharp=50)
     P.push(M)
     n = 24
     rings = []
@@ -58,9 +58,9 @@ def blade_part(name, bone, M, blade=None, sori=0.013):
     return P
 
 
-def hilt_parts(prefix, bone, M):
+def hilt_parts(prefix, bone, M, trim="gold"):
     parts = []
-    G = Part(f"{prefix}_fittings", "gold", bone=bone)
+    G = Part(f"{prefix}_fittings", trim, bone=bone)
     G.push(M)
     # tsuba (round guard with raised rim) + seppa, fuchi collar, kashira cap
     G.tube([V((0, TSUBA_Y - 0.004, 0)), V((0, TSUBA_Y + 0.004, 0))], lambda t: (0.0425, 0.0425), 20, (True, True))
