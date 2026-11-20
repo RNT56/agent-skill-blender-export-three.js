@@ -66,6 +66,27 @@
    },
    "sneak": {
     "loop": true
+   },
+   "idle__lean": {
+    "loop": true
+   },
+   "idle__shoulder": {
+    "loop": true
+   },
+   "idle__port": {
+    "loop": true
+   },
+   "walk__trail": {
+    "loop": true
+   },
+   "run__trail": {
+    "loop": true
+   },
+   "walk__port": {
+    "loop": true
+   },
+   "run__port": {
+    "loop": true
    }
   },
   "team_mask": "out/ashigaru_unit_02_tex/ashigaru_team.png",
@@ -96,7 +117,14 @@
    "hit",
    "death",
    "crouch_idle",
-   "sneak"
+   "sneak",
+   "idle__lean",
+   "idle__shoulder",
+   "idle__port",
+   "walk__trail",
+   "run__trail",
+   "walk__port",
+   "run__port"
   ]
  },
  "export": {

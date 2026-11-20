@@ -346,6 +346,36 @@ def equip(t):
     return finish(_keyed(keys, min(t, EQUIP_T)))
 
 
+# ------------------------------------------------------------------------------------------------------------- variety (2026-11-20): <base>__<style> clips (view/anim/variety.js)
+BOW_GROUND = bowd((0.300, -0.140, 0.790), (0.02, -1.0, 0.0), (0.04, -0.14, 0.99), pole=(0.40, 0.65, -0.65))     # the lower tip on the ground beside his left foot
+BOW_LOW = ((0.255, -0.240, 0.930), (0.10, -0.62, -0.78), (0.86, -0.46, 0.22), (0.5, 0.4, -0.7))                  # walking: held low and level across his left side
+
+
+def idle_rest(t):
+    """the bow's lower tip set on the ground beside him, the weight on the right leg; now and then he looks down the line"""
+    ph = TAU * t / 9.0
+    br = math.sin(ph * 2 + 0.3)
+    b = bowd(V(BOW_GROUND["G"]) + V((0.0, 0.0, 0.003 * br)), BOW_GROUND["U"], BOW_GROUND["W"], BOW_GROUND["pole"])
+    h = handd(V(HAND_HANG["pinch"]) + V((0.0, 0.004 * br, 0.003 * br)), HAND_HANG["dir"], HAND_HANG["palm"], HAND_HANG["pole"])
+    look = -18.0 * smooth((math.sin(ph) - 0.4) / 0.6)
+    return finish(pose((-0.018, 0.0, -0.018 + 0.003 * br), (0.0, 0.0, -4.0), (1.4 + 0.8 * br, 0.0, 2.0), (-1.5, 0.0, look),
+                       foot(0.150, 0.030, 12.0), foot(-0.130, -0.040, -14.0), b, h, curl=(0.85, 0.22)))
+
+
+def idle_watch(t):
+    """at ease with the weight on the left leg, the bow upright in the left hand, his eyes going slowly over the field"""
+    ph = TAU * t / 10.0
+    br = math.sin(ph * 2)
+    b = bowd(V(BOW_EASE["G"]) + V((0.006, 0.0, 0.004 * br)), BOW_EASE["U"], V(BOW_EASE["W"]) + V((0.02, 0.0, 0.0)), BOW_EASE["pole"])
+    h = handd(V(HAND_HANG["pinch"]) + V((0.008, 0.004 * br, 0.003 * br)), HAND_HANG["dir"], HAND_HANG["palm"], HAND_HANG["pole"])
+    return finish(pose((0.020, 0.0, -0.020 + 0.003 * br), (0.0, 0.0, 5.0), (1.2 + 0.8 * br, 0.0, -2.0), (-2.0, 0.0, 24.0 * math.sin(ph)),
+                       foot(0.140, 0.040, 14.0), foot(-0.150, -0.040, -8.0), b, h, curl=(0.85, 0.22)))
+
+
+def walk_low(t):
+    return locomotion(t, WALK_G, 3.0, 0.18, bow=BOW_LOW)
+
+
 CLIPS = {
     "equip": dict(fn=equip, duration=EQUIP_T, loop=False, weapon="none", events={"take": EQUIP_TAKE}),
     "idle": dict(fn=idle, duration=8.0, loop=True, weapon="none"),
@@ -361,6 +391,9 @@ CLIPS = {
     "crouch_shoot": dict(fn=crouch_shoot, duration=SHOT_T, loop=False, weapon="none", events={"arrow": 0.1333, "release": REL_T}),
     "hit": dict(fn=hit, duration=0.6, loop=False, weapon="none"),
     "death": dict(fn=death, duration=DEATH_T, loop=False, weapon="none"),
+    "idle__rest": dict(fn=idle_rest, duration=9.0, loop=True, weapon="none"),
+    "idle__watch": dict(fn=idle_watch, duration=10.0, loop=True, weapon="none"),
+    "walk__low": dict(fn=walk_low, duration=WALK_G["T"], loop=True, weapon="none", speed=WALK_V),
 }
 
 

@@ -66,6 +66,15 @@
    },
    "death": {
     "loop": false
+   },
+   "idle__rest": {
+    "loop": true
+   },
+   "idle__watch": {
+    "loop": true
+   },
+   "walk__low": {
+    "loop": true
    }
   },
   "team_mask": "out/archer_unit_02_tex/archer_team.png",
@@ -96,7 +105,10 @@
    "sneak",
    "crouch_shoot",
    "hit",
-   "death"
+   "death",
+   "idle__rest",
+   "idle__watch",
+   "walk__low"
   ]
  },
  "export": {

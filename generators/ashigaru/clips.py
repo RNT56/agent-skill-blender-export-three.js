@@ -328,6 +328,92 @@ def equip(t):
     return _keyed(keys, min(t, EQUIP_T))
 
 
+# ------------------------------------------------------------------------------------------------------------- variety (2026-11-20)
+# The owner: "ashigaru with spear should have more variety of pose and animations (idle, walking): currently the spear is always held vertically; when
+# walking some could also hold it horizontally or angled". A clip named <base>__<style> is a variant of <base>: the game picks idles in turn and gives each
+# man ONE way of carrying his spear on the march (view/anim/variety.js).
+def idle_lean(t):
+    """leaning on the upright spear, both hands stacked on the shaft at chest height, the weight on one leg"""
+    ph = TAU * t / 9.0
+    br = math.sin(ph * 2)
+    D = V((0.012, 0.090 + 0.006 * br, 1.0)).normalized()                  # the top leans toward him
+    butt = V((-0.085, -0.300, 0.0))
+    g = 1.20 / D.z
+    sp = spear(butt + D * g, D, (0.45, -0.89, 0.0), (-0.45, -0.89, 0.0), poleR=(-0.60, 0.35, -0.72), poleL=(0.60, 0.35, -0.72))
+    return pose((0.020 + 0.004 * math.sin(ph), 0.012, -0.022 + 0.003 * br), (2.0, 0.0, 4.0 + 1.5 * math.sin(ph)), (6.0 + 0.8 * br, 0.0, -3.0),
+                (-4.0, 0.0, 9.0 * math.sin(ph * 0.5)), foot(0.150, 0.020, 12.0), foot(-0.140, -0.060, -16.0), sp, g, slide=0.12, curl=(0.95, 1.0))
+
+
+def idle_shoulder(t):
+    """the spear sloped back on the right shoulder as on the march, standing easy; the left thumb in the sash; he looks about"""
+    ph = TAU * t / 10.0
+    br = math.sin(ph * 2 + 0.4)
+    D = V((0.020, 0.30, 0.95)).normalized()
+    sp = spear(CARRY_B + V((0.0, 0.0, 0.003 * br)), D, CARRY_NR, poleR=(-0.70, 0.55, -0.35))
+    look = 22.0 * math.sin(ph) - 8.0 * smooth((math.sin(ph * 3) - 0.6) / 0.4)
+    hl = dict(pos=V((0.135, -0.125, 0.985)), pole=V((0.65, 0.55, -0.5)))
+    return pose((-0.012, 0.0, -0.016 + 0.003 * br), (0.0, 0.0, -3.0), (1.5 + 0.8 * br, 0.0, 2.0), (-2.0, 0.0, look), foot(0.130, 0.040, 8.0), foot(-0.150, -0.030, -18.0),
+                sp, CARRY_GRIP, handL=hl, curl=(0.55, 1.0))
+
+
+def idle_port(t):
+    """the spear held slanting across the body in both hands, the point up and to his left, the butt by the right hip"""
+    ph = TAU * t / 8.0
+    br = math.sin(ph * 2)
+    B = V((-0.170, -0.150, 0.960 + 0.004 * br))
+    D = V((0.48, -0.30, 0.82)).normalized()
+    sp = spear(B, D, (0.30, -0.80, 0.52), (-0.25, -0.86, -0.45), poleR=(-0.70, 0.45, -0.55), poleL=(0.70, 0.45, -0.55))
+    return pose((0.006 * math.sin(ph), 0.0, -0.016 + 0.003 * br), (0.0, 0.0, 6.0), (1.5 + 0.8 * br, 0.0, -4.0), (-1.0, 0.0, 5.0 * math.sin(ph)),
+                foot(0.140, 0.010, 10.0), foot(-0.130, -0.020, -12.0), sp, 0.70, slide=0.42, curl=(0.9, 1.0))
+
+
+TRAIL_NR = LOW_NR                                                      # the hand over the shaft on its outer side (as he holds it hidden in the grass)
+
+
+def _trail(t, G, lean, swing, arm_bend, run=False):
+    """on the move with the spear at the trail: held at its balance point in the right hand, level beside him, the point forward and a little down"""
+    P = locomotion(t, G, lean, swing, arm_bend=arm_bend)
+    T = G["T"]
+    ph2 = TAU * (t % T) / T
+    tw = math.sin(ph2 + 0.2)
+    hips = P["hips_pos"]
+    B = V((-0.235, -0.030 + (0.07 if run else 0.05) * tw, 0.840 if not run else 0.880)) + V((0.0, 0.0, hips.z))
+    D = V((0.035, -1.0, -0.08 + 0.02 * math.cos(2 * ph2))).normalized()
+    P["spear"] = spear(B, D, TRAIL_NR, poleR=(-0.40, 0.85, -0.25))
+    P["gripR"], P["curl_R"] = LOW_GRIP, 1.0
+    return P
+
+
+def _port(t, G, lean, swing):
+    """on the move with the spear slanting across the chest in both hands (the point up and to the left): no arm swings"""
+    P = locomotion(t, G, lean, swing)
+    T = G["T"]
+    ph2 = TAU * (t % T) / T
+    hips = P["hips_pos"]
+    B = V((-0.165, -0.165, 0.975)) + V((0.0, 0.0, hips.z)) + V((0.0, 0.0, 0.008 * math.cos(2 * ph2)))
+    D = V((0.46, -0.32, 0.83 + 0.02 * math.sin(ph2))).normalized()
+    P["spear"] = spear(B, D, (0.30, -0.80, 0.52), (-0.25, -0.86, -0.45), poleR=(-0.70, 0.45, -0.55), poleL=(0.70, 0.45, -0.55))
+    P["gripR"], P["slide"], P["lhand"], P["curl_L"], P["curl_R"] = 0.70, 0.42, 1.0, 0.9, 1.0
+    P["hips_rot"] = (P["hips_rot"][0], 0.0, P["hips_rot"][2] * 0.5)
+    P["spine"] = (P["spine"][0], 0.0, P["spine"][2] * 0.5)
+    return P
+
+
+def walk_trail(t):
+    return _trail(t, WALK_G, 3.0, 0.18, 0.0)
+
+
+def run_trail(t):
+    return _trail(t, RUN_G, 10.0, 0.28, 1.0, run=True)
+
+
+def walk_port(t):
+    return _port(t, WALK_G, 3.0, 0.18)
+
+
+def run_port(t):
+    return _port(t, RUN_G, 9.0, 0.28)
+
 CLIPS = {
     "equip": dict(fn=equip, duration=EQUIP_T, loop=False, weapon="none", events={"take": EQUIP_TAKE}),
     "idle": dict(fn=idle, duration=8.0, loop=True, weapon="none"),
@@ -343,4 +429,11 @@ CLIPS = {
     "death": dict(fn=death, duration=DEATH_T, loop=False, weapon="none"),
     "crouch_idle": dict(fn=crouch_idle, duration=5.0, loop=True, weapon="none"),
     "sneak": dict(fn=sneak, duration=SNEAK_G["T"], loop=True, weapon="none", speed=SNEAK_V),
+    "idle__lean": dict(fn=idle_lean, duration=9.0, loop=True, weapon="none"),
+    "idle__shoulder": dict(fn=idle_shoulder, duration=10.0, loop=True, weapon="none"),
+    "idle__port": dict(fn=idle_port, duration=8.0, loop=True, weapon="none"),
+    "walk__trail": dict(fn=walk_trail, duration=WALK_G["T"], loop=True, weapon="none", speed=WALK_V),
+    "run__trail": dict(fn=run_trail, duration=RUN_G["T"], loop=True, weapon="none", speed=RUN_V),
+    "walk__port": dict(fn=walk_port, duration=WALK_G["T"], loop=True, weapon="none", speed=WALK_V),
+    "run__port": dict(fn=run_port, duration=RUN_G["T"], loop=True, weapon="none", speed=RUN_V),
 }
