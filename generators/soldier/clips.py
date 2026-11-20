@@ -275,6 +275,15 @@ class RefitSolver(AA.Solver):
             if d2 > 0.004:
                 p = AA.Solver.solve(self, self.refit(P, lift=d + d2))
         self.free_hand(p, P)
+        if getattr(self, "body", None) is not None:
+            from samurai import armfix
+            on_shaft = {"R": True, "L": float(P.get("lhand", 0.0)) > 0.999}        # the hands closed on the spear may turn about it (armfix.grip_roll)
+            for s in "LR":
+                if on_shaft[s]:
+                    H = self.hands[s]
+                    armfix.grip_roll(p, s, self.body, H["grip"], H["c"], keep=("weapon_r", "weapon_r2"))
+            for s in "LR":
+                armfix.fix_arm(p, s, self.body, keep=("weapon_r", "weapon_r2") if s == "R" else ())
         # a free hand that comes down to the ground lies ON it (it kept the forearm's line and went in to the knuckles)
         if float(P.get("lhand", 0.0)) < 0.5:
             w = 1.0 - smooth(0.05, 0.17, p.head("hand.L").z)
@@ -415,6 +424,8 @@ def run(cfg, work, A=None, rel=lambda p: p, log=print):
     ref_arm.name = ref_arm.data.name = "_RefRig"
     ref = AA.Solver(ref_arm)
     solver = RefitSolver(arm, hands, facts["spear"], ref)
+    from samurai import armfix
+    solver.body = armfix.Body(solver.rig, [bpy.data.objects[n] for n in facts["bodies"].values()], log=log)      # arms keep out of the trunk (armfix.py)
     log(f"  refit: legs x{solver.kl:.3f}, arms x{solver.ka:.3f}, planted ankle {solver.ankle:.3f} m (the clips': {AZ_REF})")
     all_chains = chains(facts)
     only = A["only"].split(",") if "only" in A else None

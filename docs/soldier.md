@@ -60,5 +60,18 @@ layout (`assemble.LAYOUT`).
 13. A game camera may have a NEAR plane of metres (samurai-vale: 2.5 m): an "invisible" unit in a close screenshot is clipped, not broken. And a 4096 texture
     decodes asynchronously: the first frames after load draw shadows but no body.
 
+## Arms (2026-11-21): `samurai/armfix.py`, shared by the samurai and the soldier units
+The owner: "arms glitch through the body, an arm is not visible, hands are swirled". After every frame is solved, per arm, with the WRIST and the weapons
+left where the clip put them:
+- **a hand on a round shaft turns about it** (`grip_roll`, +-40 deg) to where the wrist is least bent and twisted: a clip written for another hand often
+  asked for a wrist bent 150 deg, which smeared the palm off the shaft (the hand's heel is skinned partly to the forearm);
+- **the elbow turns about the shoulder-wrist line** only where the clip's own arm is inside the trunk, the thighs or the head (`Body`: star-shaped
+  slices of the trunk measured from body + armour, capsules for the thighs, a sphere for the head + helmet); gradually, never by a switch;
+- **the forearm rolls about its own axis** to take the wrist's twist (up to 85 deg), chosen against twist AND bend together;
+- **the wrist's bend is held to 80 deg**; the upper arm may not roll more than the clip's own (a rolled humerus wrings the shoulder: no twist bones).
+Measured on the real meshes (wrist twist / bend, centre line inside body + armour) every clip of both units: twists from up to 179 deg to under 95,
+bends from up to 175 deg to at most 80. A few arms still touch the body where the clip's hand target itself is on it (the samurai's sheathing hand at
+the obi, a hand resting on the scabbard).
+
 ## Not done
 No golden tests for `ashigaru_unit_02` / `archer_unit_02` in `tests/` yet. The samurai is still the procedural build. One head-band end on the ashigaru's bare body was hard to get into the livery mask (texels the position bake missed now count as band).

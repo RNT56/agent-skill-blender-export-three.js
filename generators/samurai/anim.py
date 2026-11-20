@@ -57,6 +57,9 @@ class Solver:
         self.thigh_dir = {s: (r.tail[f"thigh.{s}"] - r.head[f"thigh.{s}"]).normalized() for s in "LR"}
         self.foot_rest_dir = (r.tail["foot.L"] - r.head["foot.L"]).normalized()
         self.last_shift = 0.0
+        from . import armfix
+        meshes = armfix.body_meshes(arm_obj)
+        self.body = armfix.Body(r, meshes, head_pad=0.045) if meshes else None       # arms keep out of the trunk and the helmet (armfix.py)
 
     # -------------------------------------------------------------------------------------------------- pieces
     def spine(self, p, P):
@@ -205,6 +208,10 @@ class Solver:
                         d = (T.to_3x3() @ V(H["dir"])) if sp == "hips" else V(H["dir"])
                         z = (T.to_3x3() @ V(H.get("hint", (0, 0, 1)))) if sp == "hips" else V(H.get("hint", (0, 0, 1)))
                         p.aim(f"hand.{s}", d, z)
+        if self.body is not None:
+            from . import armfix
+            for s in "LR":
+                armfix.fix_arm(p, s, self.body, keep=("weapon_r",) if s == "R" else ())
         self.fingers(p, P)
         self.secondary(p, P)
         return p
